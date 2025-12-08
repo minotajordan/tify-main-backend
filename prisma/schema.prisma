@@ -1,0 +1,443 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "mysql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                        String    @id @default(uuid())
+  email                     String    @unique
+  username                  String    @unique
+  fullName                  String?   @map("full_name")
+  avatarUrl                 String?   @map("avatar_url")
+  passwordHash              String?   @map("password_hash")
+  deviceId                  String?   @unique @map("device_id")
+  isGuest                   Boolean   @default(true) @map("is_guest")
+  phoneNumber               String?   @unique @map("phone_number")
+  isPhoneVerified           Boolean   @default(false) @map("is_phone_verified")
+  verificationCode          String?   @map("verification_code")
+  verificationCodeExpiresAt DateTime? @map("verification_code_expires_at")
+  isAdmin                   Boolean   @default(false) @map("is_admin")
+  isCoordinator             Boolean   @default(false) @map("is_coordinator")
+  isDisabled                Boolean   @default(false) @map("is_disabled")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  ownedChannels          Channel[]              @relation("ChannelOwner")
+  messagesSent           Message[]              @relation("MessageSender")
+  messagesOverrideSet    Message[]              @relation("MessageOverrideSetter")
+  subscriptions          ChannelSubscription[]
+  invitationLinks        InvitationLink[]
+  qrCodes                QrCode[]
+  messageDeliveries      MessageDelivery[]
+  messageApprovals       MessageApproval[]
+  messageRevisionsEdited MessageRevision[]      @relation("MessageRevisionEditor")
+  profile                UserProfile?
+  messagingSettings      UserMessagingSetting[]
+  approverAssignments    ChannelApprover[]
+  createdCategories      MessageCategory[]      @relation("MessageCategory_creator")
+  messageViews           MessageView[]
+  channelVisits          ChannelVisit[]
+
+  @@map("tify_users")
+}
+
+model Channel {
+  id                 String             @id @default(uuid())
+  title              String
+  description        String?
+  websiteUrl         String?            @map("website_url")
+  socialLinks        Json?              @map("social_links")
+  logoUrl            String?            @map("logo_url")
+  icon               String             @default("bubble.left.and.bubble.right")
+  parentId           String?            @map("parent_id")
+  ownerId            String             @map("owner_id")
+  organizationId     String             @map("organization_id")
+  isPublic           Boolean            @default(true) @map("is_public")
+  isHidden           Boolean            @default(false) @map("is_hidden")
+  searchExactOnly    Boolean            @default(false) @map("search_exact_only")
+  passwordHash       String?            @map("password_hash")
+  referenceCode      String?            @unique @map("reference_code")
+  verificationStatus VerificationStatus @default(UNVERIFIED) @map("verification_status")
+  approvalPolicy     ApprovalPolicy     @default(OPTIONAL) @map("approval_policy")
+  memberCount        Int                @default(0) @map("member_count")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  owner             User                          @relation("ChannelOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  organization      Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent            Channel?                      @relation("ChannelHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  subchannels       Channel[]                     @relation("ChannelHierarchy")
+  messages          Message[]
+  subscriptions     ChannelSubscription[]
+  invitationLinks   InvitationLink[]
+  qrCodes           QrCode[]
+  approvers         ChannelApprover[]
+  verificationDocs  ChannelVerificationDocument[]
+  categories        ChannelCategoryAssignment[]
+  messageCategories MessageCategory[]
+  visits           ChannelVisit[]
+
+  @@map("tify_channels")
+}
+
+model Message {
+  id                    String          @id @default(uuid())
+  channelId             String          @map("channel_id")
+  senderId              String          @map("sender_id")
+  categoryId            String          @map("category_id")
+  content               String
+  durationSeconds       Int             @default(30) @map("duration_seconds")
+  expiresAt             DateTime?       @map("expires_at")
+  isEmergency           Boolean         @default(false) @map("is_emergency")
+  isImmediate           Boolean         @default(false) @map("is_immediate")
+  priority              MessagePriority @default(MEDIUM) @map("priority")
+  approvalOverride      ApprovalPolicy? @map("approval_override")
+  approvalOverrideSetBy String?         @map("approval_override_set_by")
+  approvalOverrideSetAt DateTime?       @map("approval_override_set_at")
+  deliveryMethod        DeliveryMethod  @default(PUSH) @map("delivery_method")
+  eventAt               DateTime?       @map("event_at")
+  publishedAt           DateTime?       @map("published_at")
+  state                 MessageState    @default(ACTIVE) @map("state")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  channel        Channel             @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender         User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  category       MessageCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  overrideSetter User?               @relation("MessageOverrideSetter", fields: [approvalOverrideSetBy], references: [id])
+  deliveries     MessageDelivery[]
+  approvals      MessageApproval[]
+  attachments    MessageAttachment[]
+  revisions      MessageRevision[]
+  views          MessageView[]
+
+  @@map("tify_messages")
+}
+
+model ChannelSubscription {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  channelId       String   @map("channel_id")
+  subscribedAt    DateTime @default(now()) @map("subscribed_at")
+  isActive        Boolean  @default(true) @map("is_active")
+  isFavorite      Boolean  @default(false) @map("is_favorite")
+  receiveMessages Boolean  @default(true) @map("receive_messages")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+  @@map("tify_channel_subscriptions")
+}
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  actorId         String   @map("actor_id")
+  action          String
+  targetUserId    String?  @map("target_user_id")
+  targetChannelId String?  @map("target_channel_id")
+  details         Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("tify_audit_logs")
+}
+
+model MessageDelivery {
+  id             String          @id @default(uuid())
+  messageId      String          @map("message_id")
+  userId         String          @map("user_id")
+  deliveryStatus DeliveryStatus  @default(PENDING) @map("delivery_status")
+  deliveryMethod DeliveryMethod? @map("delivery_method")
+  deliveredAt    DateTime?       @map("delivered_at")
+  readAt         DateTime?       @map("read_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tify_message_deliveries")
+}
+
+model InvitationLink {
+  id          String    @id @default(uuid())
+  channelId   String    @map("channel_id")
+  createdBy   String    @map("created_by")
+  linkCode    String    @unique @map("link_code")
+  expiresAt   DateTime? @map("expires_at")
+  maxUses     Int?      @map("max_uses")
+  currentUses Int       @default(0) @map("current_uses")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("tify_invitation_links")
+}
+
+model QrCode {
+  id        String    @id @default(uuid())
+  channelId String    @map("channel_id")
+  createdBy String    @map("created_by")
+  qrData    String    @map("qr_data")
+  expiresAt DateTime? @map("expires_at")
+  scanCount Int       @default(0) @map("scan_count")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("tify_qr_codes")
+}
+
+enum DeliveryMethod {
+  PUSH
+  SMS
+  WHATSAPP
+  TELEGRAM
+  EMAIL
+  BOTH
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  VERIFIED_CERTIFIED
+}
+
+enum ApprovalPolicy {
+  REQUIRED
+  OPTIONAL
+  DISABLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MessagePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MessageState {
+  ACTIVE
+  CANCELLED
+}
+
+enum CategoryScope {
+  GLOBAL
+  CHANNEL
+}
+
+enum AttachmentType {
+  FILE
+  LINK
+  MEDIA
+}
+
+enum MessagingPlatform {
+  WHATSAPP
+  TELEGRAM
+  EMAIL
+  PUSH
+  SMS
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  nit       String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channels Channel[]
+
+  @@map("tify_organizations")
+}
+
+model ChannelApprover {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  removedAt DateTime? @map("removed_at")
+  removedBy String?   @map("removed_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@map("tify_channel_approvers")
+}
+
+model MessageApproval {
+  id         String         @id @default(uuid())
+  messageId  String         @map("message_id")
+  approverId String         @map("approver_id")
+  status     ApprovalStatus @default(PENDING) @map("status")
+  decidedAt  DateTime?      @map("decided_at")
+
+  message  Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  approver User    @relation(fields: [approverId], references: [id])
+
+  @@unique([messageId, approverId])
+  @@map("tify_message_approvals")
+}
+
+model MessageCategory {
+  id        String        @id @default(uuid())
+  name      String
+  scope     CategoryScope @default(GLOBAL) @map("scope")
+  channelId String?       @map("channel_id")
+  createdBy String?       @map("created_by")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  channel  Channel?  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  creator  User?     @relation("MessageCategory_creator", fields: [createdBy], references: [id])
+  messages Message[]
+
+  @@unique([channelId, name])
+  @@map("tify_message_categories")
+}
+
+model MessageAttachment {
+  id        String         @id @default(uuid())
+  messageId String         @map("message_id")
+  type      AttachmentType @map("type")
+  url       String
+  metadata  Json?
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("tify_message_attachments")
+}
+
+model MessageRevision {
+  id                     String          @id @default(uuid())
+  messageId              String          @map("message_id")
+  editorId               String          @map("editor_id")
+  previousContent        String          @map("previous_content")
+  previousCategoryId     String?         @map("previous_category_id")
+  previousPriority       MessagePriority @map("previous_priority")
+  previousIsImmediate    Boolean         @map("previous_is_immediate")
+  previousDeliveryMethod DeliveryMethod  @map("previous_delivery_method")
+  changedAt              DateTime        @default(now()) @map("changed_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  editor  User    @relation("MessageRevisionEditor", fields: [editorId], references: [id])
+
+  @@map("tify_message_revisions")
+}
+
+model ChannelVerificationDocument {
+  id        String    @id @default(uuid())
+  channelId String    @map("channel_id")
+  title     String
+  docUrl    String    @map("doc_url")
+  issuer    String?
+  issuedAt  DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("tify_channel_verification_docs")
+}
+
+model UserProfile {
+  id         String  @id @default(uuid())
+  userId     String  @unique @map("user_id")
+  country    String?
+  department String?
+  city       String?
+  extra      Json?   @map("extra")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tify_user_profiles")
+}
+
+model UserMessagingSetting {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  platform  MessagingPlatform @map("platform")
+  handle    String?
+  isEnabled Boolean           @default(true) @map("is_enabled")
+  verified  Boolean           @default(false) @map("verified")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@map("tify_user_messaging_settings")
+}
+
+model ChannelCategory {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  assignments ChannelCategoryAssignment[]
+
+  @@unique([name])
+  @@map("tify_channel_categories")
+}
+
+model ChannelCategoryAssignment {
+  id         String @id @default(uuid())
+  channelId  String @map("channel_id")
+  categoryId String @map("category_id")
+
+  channel  Channel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  category ChannelCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, categoryId])
+  @@map("tify_channel_category_assignments")
+}
+
+model MessageView {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  userId    String?  @map("user_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([messageId])
+  @@index([userId])
+  @@map("tify_message_views")
+}
+
+model ChannelVisit {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  userId    String?  @map("user_id")
+  visitedAt DateTime @default(now()) @map("visited_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([channelId])
+  @@index([userId])
+  @@map("tify_channel_visits")
+}

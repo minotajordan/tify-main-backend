@@ -1,0 +1,553 @@
+Rutas de la API con payload y response
+
+Canales (/api/channels)
+GET /api/channels
+Request: query { userId?, search?, isPublic?('true'|'false') }
+Response: 200 Channel[] con owner, subchannels, _count.subscriptions, isSubscribed
+
+Ejemplo (query): ?userId=usr_123&search=Emergencias&isPublic=true
+Ejemplo (response):
+[
+  {
+    "id": "chn_001",
+    "title": "Emergencias Ciudad",
+    "description": "Alertas y coordinación de emergencias",
+    "icon": "exclamationmark.triangle",
+    "memberCount": 524,
+    "isPublic": true,
+    "isHidden": false,
+    "searchExactOnly": false,
+    "referenceCode": "REF-EMERG-001",
+    "approvalPolicy": "OPTIONAL",
+    "ownerId": "usr_owner_01",
+    "organizationId": "org_01",
+    "parentId": null,
+    "createdAt": "2025-10-01T12:00:00.000Z",
+    "owner": { "id": "usr_owner_01", "username": "coord_ciudad", "fullName": "Coordinación Ciudad" },
+    "subchannels": [
+      { "id": "sub_001", "title": "Zona Norte", "icon": "mappin.and.ellipse", "memberCount": 210 },
+      { "id": "sub_002", "title": "Zona Sur", "icon": "mappin.and.ellipse", "memberCount": 189 }
+    ],
+    "_count": { "subscriptions": 524 },
+    "isSubscribed": true
+  },
+  {
+    "id": "chn_002",
+    "title": "Red Nacional",
+    "description": "Información nacional",
+    "icon": "globe",
+    "memberCount": 1042,
+    "isPublic": true,
+    "isHidden": false,
+    "searchExactOnly": false,
+    "referenceCode": "REF-NACIONAL-001",
+    "approvalPolicy": "REQUIRED",
+    "ownerId": "usr_owner_02",
+    "organizationId": "org_02",
+    "parentId": null,
+    "createdAt": "2025-10-05T09:30:00.000Z",
+    "owner": { "id": "usr_owner_02", "username": "admin_nacional", "fullName": "Admin Nacional" },
+    "subchannels": [],
+    "_count": { "subscriptions": 1042 },
+    "isSubscribed": false
+  }
+]
+
+GET /api/channels/:id
+Request: params { id } ; query { userId? }
+Response: 200 Channel con owner, subchannels, messages[20] con sender, approvers[{ user }], isSubscribed ; 404 { error }
+
+Ejemplo (request): /api/channels/chn_001?userId=usr_123
+Ejemplo (response):
+{
+  "id": "chn_001",
+  "title": "Emergencias Ciudad",
+  "description": "Alertas y coordinación de emergencias",
+  "icon": "exclamationmark.triangle",
+  "memberCount": 524,
+  "isPublic": true,
+  "isHidden": false,
+  "searchExactOnly": false,
+  "referenceCode": "REF-EMERG-001",
+  "approvalPolicy": "OPTIONAL",
+  "ownerId": "usr_owner_01",
+  "organizationId": "org_01",
+  "parentId": null,
+  "createdAt": "2025-10-01T12:00:00.000Z",
+  "owner": { "id": "usr_owner_01", "username": "coord_ciudad", "fullName": "Coordinación Ciudad" },
+  "subchannels": [ { "id": "sub_001", "title": "Zona Norte", "icon": "mappin.and.ellipse", "memberCount": 210 } ],
+  "messages": [
+    {
+      "id": "msg_9001",
+      "channelId": "chn_001",
+      "senderId": "usr_coord_01",
+      "categoryId": "cat_emergente",
+      "content": "Incendio controlado en la Calle 10",
+      "durationSeconds": 45,
+      "expiresAt": "2025-11-18T13:20:00.000Z",
+      "isEmergency": true,
+      "isImmediate": true,
+      "priority": "HIGH",
+      "deliveryMethod": "PUSH",
+      "eventAt": "2025-11-18T12:50:00.000Z",
+      "publishedAt": "2025-11-18T12:51:30.000Z",
+      "sender": { "id": "usr_coord_01", "username": "coord_zona", "fullName": "Coordinador Zona" }
+    }
+  ],
+  "isSubscribed": true
+}
+
+GET /api/channels/user/:userId/subscribed
+Request: params { userId }
+Response: 200 Channel[] de suscripción con owner, subchannels, isSubscribed=true, subscribedAt
+
+Ejemplo (request): /api/channels/user/usr_123/subscribed
+Ejemplo (response):
+[
+  {
+    "id": "chn_001",
+    "title": "Emergencias Ciudad",
+    "description": "Alertas y coordinación de emergencias",
+    "icon": "exclamationmark.triangle",
+    "memberCount": 524,
+    "owner": { "id": "usr_owner_01", "username": "coord_ciudad", "fullName": "Coordinación Ciudad" },
+    "subchannels": [ { "id": "sub_001", "title": "Zona Norte", "icon": "mappin.and.ellipse" } ],
+    "isSubscribed": true,
+    "subscribedAt": "2025-11-01T10:00:00.000Z"
+  }
+]
+
+POST /api/channels/:id/validate-password
+Request: params { id } ; body { password: string }
+Response: 200 { valid: boolean } ; 404 { error }
+
+Ejemplo (body): { "password": "password" }
+Ejemplo (response): { "valid": true }
+
+POST /api/channels
+Request: body { title, description?, icon?, parentId?, ownerId, organizationId, organizationName?, nit?, isPublic=true, isHidden=false, searchExactOnly=false, password?, referenceCode?, approvalPolicy='OPTIONAL', websiteUrl?, socialLinks?, logoUrl? }
+Notes: si no se proporciona `organizationId` y se envía `organizationName`+`nit`, el backend puede crearla automáticamente.
+Response: 201 Channel ; 400 { error, code: 'VALIDATION_ERROR' } ; 404 { error, code: 'OWNER_NOT_FOUND'|'ORGANIZATION_NOT_FOUND' } ; 500 { error, code: 'CHANNEL_CREATE_FAILED', details }
+
+Ejemplo (body):
+{
+  "title": "Emergencias Barrio",
+  "description": "Alertas del barrio",
+  "websiteUrl": "https://emergencias-barrio.example",
+  "socialLinks": { "twitter": "https://twitter.com/emerg_barrio", "instagram": "https://instagram.com/emerg_barrio" },
+  "logoUrl": "https://cdn.example/logo-barrio.png",
+  "icon": "bell.circle",
+  "ownerId": "usr_owner_03",
+  "organizationId": "org_03",
+  "isPublic": false,
+  "isHidden": false,
+  "searchExactOnly": true,
+  "password": "password",
+  "referenceCode": "REF-EMERG-BARRIO-001",
+  "approvalPolicy": "OPTIONAL"
+}
+Ejemplo (response):
+{
+  "id": "chn_003",
+  "title": "Emergencias Barrio",
+  "description": "Alertas del barrio",
+  "websiteUrl": "https://emergencias-barrio.example",
+  "socialLinks": { "twitter": "https://twitter.com/emerg_barrio", "instagram": "https://instagram.com/emerg_barrio" },
+  "logoUrl": "https://cdn.example/logo-barrio.png",
+  "icon": "bell.circle",
+  "ownerId": "usr_owner_03",
+  "organizationId": "org_03",
+  "isPublic": false,
+  "isHidden": false,
+  "searchExactOnly": true,
+  "referenceCode": "REF-EMERG-BARRIO-001",
+  "approvalPolicy": "OPTIONAL",
+  "createdAt": "2025-11-18T12:00:00.000Z"
+}
+
+POST /api/channels/:id/subchannels
+Request: params { id } ; body { title, description, icon?, logoUrl?, ownerId, organizationId, isPublic=true, isHidden=false, searchExactOnly=false, password?, referenceCode?, approvalPolicy='OPTIONAL', websiteUrl?, socialLinks? }
+Response: 201 Channel ; 500 { error }
+
+Ejemplo (request): /api/channels/chn_001/subchannels
+Ejemplo (body):
+{
+  "title": "Zona Norte",
+  "description": "Alertas del sector norte",
+  "websiteUrl": "https://red-nacional.example/norte",
+  "socialLinks": { "telegram": "https://t.me/red_nacional_norte" },
+  "logoUrl": "https://cdn.example/logo-norte.png",
+  "icon": "mappin.and.ellipse",
+  "ownerId": "usr_owner_02",
+  "organizationId": "org_02",
+  "isPublic": true,
+  "isHidden": false,
+  "searchExactOnly": false
+}
+Ejemplo (response):
+{
+  "id": "sub_001",
+  "title": "Zona Norte",
+  "description": "Alertas del sector norte",
+  "websiteUrl": "https://red-nacional.example/norte",
+  "socialLinks": { "telegram": "https://t.me/red_nacional_norte" },
+  "logoUrl": "https://cdn.example/logo-norte.png",
+  "icon": "mappin.and.ellipse",
+  "parentId": "chn_001",
+  "ownerId": "usr_owner_02",
+  "organizationId": "org_02",
+  "isPublic": true,
+  "isHidden": false,
+  "searchExactOnly": false,
+  "referenceCode": "REF-ZN-001",
+  "approvalPolicy": "OPTIONAL",
+  "createdAt": "2025-11-18T12:10:00.000Z"
+}
+
+GET /api/channels/search
+Request: query { q?, exact='false', referenceCode? }
+Response: 200 Channel[] (por code, exact o búsqueda normal) ; 500 { error }
+
+Ejemplo (query por código): ?referenceCode=REF-EMERG-BARRIO-001
+Ejemplo (response): [ { "id": "chn_003", "title": "Emergencias Barrio", "owner": { "id": "usr_owner_03", "username": "coord_barrio", "fullName": "Coordinador Barrio" } } ]
+
+Ejemplo (query exact): ?q=Canal%20Oculto&exact=true
+Ejemplo (response): [ { "id": "chn_hidden_01", "title": "Canal Oculto", "owner": { "id": "usr_hidden", "username": "owner", "fullName": "Owner" } } ]
+
+Ejemplo (query normal): ?q=Emergencias
+Ejemplo (response): [ { "id": "chn_001", "title": "Emergencias Ciudad" } ]
+
+POST /api/channels/:id/approvers
+Request: params { id } ; body { userId }
+Response: 201 ChannelApprover ; 409 { error }
+
+Ejemplo (body): { "userId": "usr_appr_01" }
+Ejemplo (response): { "id": "appr_9001", "channelId": "chn_001", "userId": "usr_appr_01" }
+
+DELETE /api/channels/:id/approvers/:userId
+Request: params { id, userId }
+Response: 200 { message } ; 404 { error }
+
+Ejemplo (response): { "message": "Aprobador eliminado" }
+
+GET /api/channels/:id/verification-docs
+Request: params { id }
+Response: 200 VerificationDocument[]
+
+Ejemplo (response): [ { "id": "doc_001", "channelId": "chn_001", "title": "Certificación Bomberos", "docUrl": "https://.../doc.pdf", "issuer": "Bomberos", "issuedAt": "2025-09-01T00:00:00.000Z" } ]
+
+POST /api/channels/:id/verification-docs
+Request: params { id } ; body { title, docUrl, issuer?, issuedAt? }
+Response: 201 VerificationDocument ; 500 { error }
+
+Ejemplo (body): { "title": "Certificación Bomberos", "docUrl": "https://.../doc.pdf", "issuer": "Bomberos", "issuedAt": "2025-09-01T00:00:00.000Z" }
+Ejemplo (response): { "id": "doc_001", "channelId": "chn_001", "title": "Certificación Bomberos", "docUrl": "https://.../doc.pdf", "issuer": "Bomberos", "issuedAt": "2025-09-01T00:00:00.000Z" }
+
+POST /api/channels/:id/categories
+Request: params { id } ; body { name, description? }
+Response: 201 ChannelCategoryAssignment ; 500 { error }
+
+Ejemplo (body): { "name": "Emergencia", "description": "Eventos urgentes" }
+Ejemplo (response): { "id": "asgn_001", "channelId": "chn_001", "categoryId": "cat_emer_01" }
+
+Mensajes (/api/messages)
+GET /api/messages/channel/:channelId
+Request: params { channelId } ; query { page=1, limit=20 }
+Response: 200 { messages: Message[], pagination: { page, limit, total, pages } } ; 500 { error }
+
+Ejemplo (request): /api/messages/channel/chn_001?page=1&limit=2
+Ejemplo (response):
+{
+  "messages": [
+    {
+      "id": "msg_9001",
+      "channelId": "chn_001",
+      "senderId": "usr_coord_01",
+      "categoryId": "cat_emergente",
+      "content": "Incendio controlado en la Calle 10",
+      "durationSeconds": 45,
+      "expiresAt": "2025-11-18T13:20:00.000Z",
+      "isEmergency": true,
+      "isImmediate": true,
+      "priority": "HIGH",
+      "deliveryMethod": "PUSH",
+      "eventAt": "2025-11-18T12:50:00.000Z",
+      "publishedAt": "2025-11-18T12:51:30.000Z",
+      "sender": { "id": "usr_coord_01", "username": "coord_zona", "fullName": "Coordinador Zona" },
+      "channel": { "title": "Emergencias Ciudad", "icon": "exclamationmark.triangle" }
+    }
+  ],
+  "pagination": { "page": 1, "limit": 2, "total": 54, "pages": 27 }
+}
+
+POST /api/messages
+Request: body { channelId, senderId, content, categoryId, priority='MEDIUM', isImmediate=false, durationSeconds=30, isEmergency=false, deliveryMethod='PUSH', attachments=[], eventAt? }
+Response: 201 { message: string, data: Message } ; 400/404/500 { error }
+
+Ejemplo (body):
+{
+  "channelId": "chn_001",
+  "senderId": "usr_coord_01",
+  "content": "Fuga de gas reportada, evite la zona",
+  "categoryId": "cat_emergente",
+  "priority": "HIGH",
+  "isImmediate": true,
+  "durationSeconds": 60,
+  "isEmergency": true,
+  "deliveryMethod": "PUSH",
+  "attachments": [ { "type": "IMAGE", "url": "https://.../foto.jpg" } ],
+  "eventAt": "2025-11-18T12:55:00.000Z"
+}
+Ejemplo (response):
+{
+  "message": "Mensaje creado exitosamente",
+  "data": {
+    "id": "msg_9010",
+    "channelId": "chn_001",
+    "senderId": "usr_coord_01",
+    "categoryId": "cat_emergente",
+    "content": "Fuga de gas reportada, evite la zona",
+    "durationSeconds": 60,
+    "expiresAt": "2025-11-18T13:55:00.000Z",
+    "isEmergency": true,
+    "isImmediate": true,
+    "priority": "HIGH",
+    "deliveryMethod": "PUSH",
+    "eventAt": "2025-11-18T12:55:00.000Z",
+    "publishedAt": "2025-11-18T12:55:30.000Z",
+    "sender": { "id": "usr_coord_01", "username": "coord_zona", "fullName": "Coordinador Zona" },
+    "channel": { "title": "Emergencias Ciudad", "icon": "exclamationmark.triangle" }
+  }
+}
+
+POST /api/messages/:id/approve
+Request: params { id } ; body { approverId }
+Response: 200 MessageApproval ; 404/403 { error }
+
+Ejemplo (body): { "approverId": "usr_appr_01" }
+Ejemplo (response): { "id": "appr_rec_001", "messageId": "msg_9010", "approverId": "usr_appr_01", "status": "APPROVED", "decidedAt": "2025-11-18T12:56:00.000Z" }
+
+POST /api/messages/:id/reject
+Request: params { id } ; body { approverId }
+Response: 200 MessageApproval(status='REJECTED') ; 404/403 { error }
+
+Ejemplo (response): { "id": "appr_rec_002", "messageId": "msg_9011", "approverId": "usr_appr_01", "status": "REJECTED", "decidedAt": "2025-11-18T13:00:00.000Z" }
+
+PUT /api/messages/:id
+Request: params { id } ; body { editorId, content?, categoryId?, priority?, isImmediate?, deliveryMethod?, eventAt? }
+Response: 200 Message actualizado ; 404/500 { error }
+
+Ejemplo (body): { "editorId": "usr_editor_01", "content": "Actualización: riesgo controlado" }
+Ejemplo (response): { "id": "msg_9010", "content": "Actualización: riesgo controlado", "sender": { "id": "usr_coord_01", "username": "coord_zona", "fullName": "Coordinador Zona" }, "channel": { "title": "Emergencias Ciudad", "icon": "exclamationmark.triangle" } }
+
+POST /api/messages/:id/override
+Request: params { id } ; body { policy, setterId }
+Response: 200 Message con approvalOverride ; 403/500 { error }
+
+Ejemplo (body): { "policy": "OPTIONAL", "setterId": "usr_admin_01" }
+Ejemplo (response): { "id": "msg_9010", "approvalOverride": "OPTIONAL", "approvalOverrideSetBy": "usr_admin_01", "approvalOverrideSetAt": "2025-11-18T13:10:00.000Z" }
+
+GET /api/messages/:id/revisions
+Request: params { id }
+Response: 200 MessageRevision[] ; 404 { error }
+
+Ejemplo (response): [ { "id": "rev_001", "messageId": "msg_9010", "editor": { "id": "usr_editor_01", "username": "editor", "fullName": "Editor" }, "changedAt": "2025-11-18T13:05:00.000Z", "previousContent": "Fuga de gas reportada, evite la zona" } ]
+
+GET /api/messages/pending/approval
+Request: header { Authorization: 'Bearer <token>' }
+Response: 200 Message[] recientes (si admin) ; 401 { error } ; 403 { error }
+
+Ejemplo (response): [ { "id": "msg_9012", "sender": { "id": "usr_sender_01", "username": "user", "fullName": "Usuario" }, "channel": { "title": "Red Nacional", "icon": "globe" }, "createdAt": "2025-11-18T12:40:00.000Z" } ]
+
+Suscripciones (/api/subscriptions)
+POST /api/subscriptions
+Request: body { userId, channelId, subchannelIds: string[] = [] }
+Response: 201 { message, subscription } (incluye channel { title, icon }) ; 200 { message: 'Suscripción reactivada', subscription }
+
+Ejemplo (body): { "userId": "usr_123", "channelId": "chn_001" }
+Ejemplo (response - creada): {
+  "message": "Suscripción creada exitosamente",
+  "subscription": {
+    "id": "subscr_001",
+    "userId": "usr_123",
+    "channelId": "chn_001",
+    "isActive": true,
+    "subscribedAt": "2025-11-18T12:30:00.000Z",
+    "channel": { "title": "Emergencias Ciudad", "icon": "exclamationmark.triangle" }
+  }
+}
+Ejemplo (response - reactivada): { "message": "Suscripción reactivada", "subscription": { "id": "subscr_001", "isActive": true } }
+
+DELETE /api/subscriptions
+Request: body { userId, channelId }
+Response: 200 { message: 'Desuscripción exitosa' } ; 404 { error }
+
+Ejemplo (body): { "userId": "usr_123", "channelId": "chn_001" }
+Ejemplo (response): { "message": "Desuscripción exitosa" }
+
+GET /api/subscriptions/user/:userId
+Request: params { userId }
+Response: 200 ChannelSubscription[] con channel(owner, _count.messages)
+
+Ejemplo (response): [ { "id": "subscr_001", "userId": "usr_123", "channelId": "chn_001", "isActive": true, "subscribedAt": "2025-11-18T12:30:00.000Z", "channel": { "id": "chn_001", "title": "Emergencias Ciudad", "owner": { "id": "usr_owner_01", "username": "coord_ciudad", "fullName": "Coordinación Ciudad" }, "_count": { "messages": 145 } } } ]
+
+PATCH /api/subscriptions/preferences/favorite
+Request: body { userId, channelId, isFavorite: boolean }
+Response: 200 ChannelSubscription ; 404 { error }
+
+Ejemplo (body): { "userId": "usr_123", "channelId": "chn_001", "isFavorite": true }
+Ejemplo (response): { "id": "subscr_001", "isFavorite": true }
+
+PATCH /api/subscriptions/preferences/receive
+Request: body { userId, channelId, receive: boolean }
+Response: 200 ChannelSubscription (receiveMessages) ; 404 { error }
+
+Ejemplo (body): { "userId": "usr_123", "channelId": "chn_001", "receive": false }
+Ejemplo (response): { "id": "subscr_001", "receiveMessages": false }
+
+Auth (/api/auth)
+GET /api/auth/has-users
+Response: 200 { hasUsers: boolean }
+
+GET /api/auth/needs-bootstrap
+Response: 200 { needsBootstrap: boolean, targetUsername: string }
+POST /api/auth/bootstrap-admin
+Request: body { code, email, username, fullName?, password, phoneNumber? }
+Notes: code debe coincidir con la variable de entorno `BOOTSTRAP_CODE` (ejemplo: `GXD634`)
+Response: 201 { token, user: { id, email, username, fullName, isAdmin } } ; 403 { error }
+
+POST /api/auth/login
+Request: body { identifier, password }
+Response: 200 { token, user } ; 401/400 { error }
+
+GET /api/auth/me
+Request: header { Authorization: 'Bearer <token>' }
+Response: 200 User ; 401/404 { error }
+
+Usuarios (/api/users)
+GET /api/users
+Request: header { Authorization }
+Response: 200 User[] con métricas { subscribedChannelsCount, messagesCount, ownedChannelsCount } ; 401/403 { error, code }
+
+POST /api/users
+Request: header { Authorization } ; body { email, username, fullName?, phoneNumber?, avatarUrl?, isAdmin?, password? }
+Response: 201 User ; 400 { error, code: 'VALIDATION_ERROR' } ; 401/403 { error, code } ; 500 { error, code: 'USER_CREATE_FAILED', details }
+
+GET /api/users/:id
+Request: params { id } ; header { Authorization opcional }
+Response: 200 UserProfile con { isGuest, isPhoneVerified, verificationCode? } ; 404 { error }
+
+POST /api/users/guest
+Request: body { deviceId, fullName? }
+Response: 201 { id } ; 500 { error, code, details }
+
+POST /api/users/:id/request-verification-code
+Request: params { id }
+Response: 200 { id, verificationCode, verificationCodeExpiresAt } ; 500 { error, code, details }
+
+POST /api/users/:id/register
+Request: body { phoneNumber, username, fullName?, avatarUrl?, code }
+Response: 200 { user, token } ; 403 { error, code } ; 404 { error } ; 500 { error, code, details }
+
+GET /api/users/:id/subscriptions
+Request: params { id } ; header { Authorization }
+Response: 200 ChannelSubscription[] ; 401/403 { error, code }
+
+GET /api/users/:id/approver-assignments
+Request: params { id } ; header { Authorization }
+Response: 200 ChannelApprover[] con channel ; 401/403 { error, code }
+
+GET /api/users/:id/pending-approvals
+Request: params { id } ; query { windowHours? } ; header { Authorization }
+Response: 200 Message[] con sender y channel ; 401/403 { error, code } ; 500 { error, code, details }
+
+Ejemplo (response):
+{
+  "id": "usr_123",
+  "email": "usuario@example.com",
+  "username": "usuario",
+  "fullName": "Usuario Ejemplo",
+  "phoneNumber": "+57 300 000 0000",
+  "isAdmin": false,
+  "createdAt": "2025-09-10T08:00:00.000Z",
+  "subscribedChannelsCount": 3,
+  "messagesCount": 12,
+  "ownedChannelsCount": 1,
+  "pendingApprovalsCount": 0
+}
+
+PUT /api/users/:id
+Request: params { id } ; body { fullName, phoneNumber }
+Response: 200 { message, user }
+
+Ejemplo (body): { "fullName": "Usuario Modificado", "phoneNumber": "+57 301 111 1111" }
+Ejemplo (response): { "message": "Perfil actualizado exitosamente", "user": { "id": "usr_123", "email": "usuario@example.com", "username": "usuario", "fullName": "Usuario Modificado", "phoneNumber": "+57 301 111 1111", "isAdmin": false } }
+
+GET /api/users/:id/channels/owned
+Request: params { id }
+Response: 200 Channel[] con _count { messages, subscriptions activos }
+
+Ejemplo (response): [ { "id": "chn_010", "title": "Canal Administrado", "_count": { "messages": 20, "subscriptions": 5 } } ]
+
+GET /api/users/:id/stats
+Request: params { id }
+Response: 200 { subscribedChannelsCount, messagesCount, ownedChannelsCount, pendingApprovalsCount, recentActivity: Message[] }
+
+Ejemplo (response): {
+  "subscribedChannelsCount": 3,
+  "messagesCount": 12,
+  "ownedChannelsCount": 1,
+  "pendingApprovalsCount": 0,
+  "recentActivity": [ { "id": "msg_8001", "channel": { "title": "Emergencias Ciudad", "icon": "exclamationmark.triangle" }, "createdAt": "2025-11-17T10:00:00.000Z" } ]
+}
+
+POST /api/users/:id/messaging-settings
+Request: params { id } ; body { platform, handle?, isEnabled=true }
+Response: 201 UserMessagingSetting ; 500 { error }
+
+Ejemplo (body): { "platform": "WHATSAPP", "handle": "+57 300 000 0000", "isEnabled": true }
+Ejemplo (response): { "userId": "usr_123", "platform": "WHATSAPP", "handle": "+57 300 000 0000", "isEnabled": true, "verified": false }
+
+PUT /api/users/:id/messaging-settings/:platform
+Request: params { id, platform } ; body { handle?, isEnabled?, verified? }
+Response: 200 UserMessagingSetting ; 500 { error }
+
+Ejemplo (body): { "handle": "+57 300 000 0000", "isEnabled": false, "verified": true }
+Ejemplo (response): { "userId": "usr_123", "platform": "WHATSAPP", "handle": "+57 300 000 0000", "isEnabled": false, "verified": true }
+
+POST /api/users/:id/verify-phone
+Request: params { id } ; body { phoneNumber? }
+Response: 200 { id, phoneNumber, isPhoneVerified: true } ; 500 { error }
+
+Ejemplo (body): { "phoneNumber": "+57 300 000 0000" }
+Ejemplo (response): { "id": "usr_123", "phoneNumber": "+57 300 000 0000", "isPhoneVerified": true }
+
+Health (/health)
+GET /health
+Response: 200 { status: 'OK', timestamp: string, uptime: number }
+
+Ejemplo (response): { "status": "OK", "timestamp": "2025-11-18T12:00:00.000Z", "uptime": 123.45 }
+
+Organizaciones (/api/organizations)
+GET /api/organizations
+Response: 200 Organization[]
+
+Ejemplo (response): [ { "id": "org_01", "name": "Protección Civil", "nit": "900123456-7" }, { "id": "org_02", "name": "Red Nacional", "nit": "900987654-3" } ]
+
+POST /api/organizations
+Request: header { Authorization: 'Bearer <token>' } ; body { name, nit }
+Response: 201 Organization ; 400 { error, code: 'VALIDATION_ERROR' } ; 401/403 { error } ; 500 { error, code, details }
+
+Ejemplo (body): { "name": "Emergencias Barrio", "nit": "901000111-2" }
+Ejemplo (response): { "id": "org_03", "name": "Emergencias Barrio", "nit": "901000111-2", "createdAt": "2025-11-18T12:00:00.000Z" }
+
+GET /api/organizations/:id
+Request: params { id }
+Response: 200 Organization ; 404 { error }
+
+Ejemplo (request): /api/organizations/org_01
+Ejemplo (response): { "id": "org_01", "name": "Protección Civil", "nit": "900123456-7", "createdAt": "2025-10-01T10:00:00.000Z" }
+
+Errores comunes
+404 Not Found: { "error": "Endpoint no encontrado" }
+500 Internal Error: { "error": "Algo salió mal!", "message": "(solo en development)" }
