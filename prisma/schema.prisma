@@ -42,6 +42,7 @@ model User {
   createdCategories      MessageCategory[]      @relation("MessageCategory_creator")
   messageViews           MessageView[]
   channelVisits          ChannelVisit[]
+  createdForms           Form[]
 
   @@map("tify_users")
 }
@@ -440,4 +441,51 @@ model ChannelVisit {
   @@index([channelId])
   @@index([userId])
   @@map("tify_channel_visits")
+}
+
+model Form {
+  id             String   @id @default(uuid())
+  title          String
+  description    String?  @db.Text
+  slug           String   @unique
+  headerContent  String?  @map("header_content") @db.Text
+  footerContent  String?  @map("footer_content") @db.Text
+  successMessage String?  @map("success_message") @db.Text
+  isActive       Boolean  @default(true) @map("is_active")
+  userId         String   @map("user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fields      FormField[]
+  submissions FormSubmission[]
+
+  @@map("tify_forms")
+}
+
+model FormField {
+  id          String   @id @default(uuid())
+  formId      String   @map("form_id")
+  type        String   // text, number, email, date, checkbox, textarea, select
+  label       String
+  placeholder String?
+  required    Boolean  @default(false)
+  options     Json?    // For select/radio inputs
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("tify_form_fields")
+}
+
+model FormSubmission {
+  id        String   @id @default(uuid())
+  formId    String   @map("form_id")
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("tify_form_submissions")
 }

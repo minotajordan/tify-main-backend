@@ -14,6 +14,7 @@ const subscriptionRoutes = require('./routes/subscriptions');
 const authRoutes = require('./routes/auth');
 const organizationRoutes = require('./routes/organizations');
 const appRoutes = require('./routes/app');
+const formRoutes = require('./routes/forms');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -171,6 +172,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/app', appRoutes);
+app.use('/api/forms', formRoutes);
 
 app.get('/api/streams/user-requests/:id/events/:eventId', (req, res) => {
   const { id, eventId } = req.params;
