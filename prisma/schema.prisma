@@ -452,6 +452,9 @@ model Form {
   footerContent  String?  @map("footer_content") @db.Text
   successMessage String?  @map("success_message") @db.Text
   isActive       Boolean  @default(true) @map("is_active")
+  isPublished    Boolean  @default(false) @map("is_published")
+  wasPublished   Boolean  @default(false) @map("was_published")
+  expiresAt      DateTime? @map("expires_at")
   userId         String   @map("user_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -470,6 +473,7 @@ model FormField {
   label       String
   placeholder String?
   required    Boolean  @default(false)
+  isHidden    Boolean  @default(false) @map("is_hidden")
   options     Json?    // For select/radio inputs
   order       Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")

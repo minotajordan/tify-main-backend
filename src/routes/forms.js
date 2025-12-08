@@ -59,7 +59,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Crear un nuevo formulario
 router.post('/', authenticate, async (req, res) => {
-  const { title, description, headerContent, footerContent, successMessage, fields } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, expiresAt, isPublished, wasPublished, fields } = req.body;
   const slug = Math.random().toString(36).substring(2, 10); // Simple slug generation
 
   try {
@@ -70,6 +70,9 @@ router.post('/', authenticate, async (req, res) => {
         headerContent,
         footerContent,
         successMessage,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        isPublished: isPublished || false,
+        wasPublished: wasPublished || isPublished || false,
         slug,
         userId: req.user.id,
         fields: {
@@ -78,6 +81,7 @@ router.post('/', authenticate, async (req, res) => {
             label: field.label,
             placeholder: field.placeholder,
             required: field.required,
+            isHidden: field.isHidden || false,
             options: field.options,
             order: index
           }))
@@ -95,7 +99,7 @@ router.post('/', authenticate, async (req, res) => {
 // Actualizar un formulario
 router.put('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
-  const { title, description, headerContent, footerContent, successMessage, isActive, fields } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, isActive, expiresAt, isPublished, wasPublished, fields } = req.body;
 
   try {
     const existingForm = await prisma.form.findUnique({ where: { id } });
@@ -113,7 +117,10 @@ router.put('/:id', authenticate, async (req, res) => {
           headerContent,
           footerContent,
           successMessage,
-          isActive
+          isActive,
+          isPublished,
+          wasPublished,
+          expiresAt: expiresAt ? new Date(expiresAt) : null
         }
       });
 
@@ -127,6 +134,7 @@ router.put('/:id', authenticate, async (req, res) => {
             label: field.label,
             placeholder: field.placeholder,
             required: field.required,
+            isHidden: field.isHidden || false,
             options: field.options ?? undefined,
             order: index
           }))
