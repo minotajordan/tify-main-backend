@@ -24,7 +24,10 @@ const authenticate = async (req, res, next) => {
 router.get('/', authenticate, async (req, res) => {
   try {
     const forms = await prisma.form.findMany({
-      where: { userId: req.user.id },
+      where: { 
+        userId: req.user.id,
+        isDeleted: false
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
@@ -48,7 +51,7 @@ router.get('/:id', authenticate, async (req, res) => {
       include: { fields: { orderBy: { order: 'asc' } } }
     });
 
-    if (!form) return res.status(404).json({ error: 'Form not found' });
+    if (!form || form.isDeleted) return res.status(404).json({ error: 'Form not found' });
     if (form.userId !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
 
     res.json(form);
@@ -159,7 +162,12 @@ router.delete('/:id', authenticate, async (req, res) => {
     if (!form) return res.status(404).json({ error: 'Form not found' });
     if (form.userId !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
 
-    await prisma.form.delete({ where: { id } });
+    // Soft delete
+    await prisma.form.update({
+      where: { id },
+      data: { isDeleted: true, isPublished: false, isActive: false }
+    });
+    
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Error deleting form' });
@@ -178,7 +186,28 @@ router.get('/public/:slug', async (req, res) => {
     });
 
     if (!form) return res.status(404).json({ error: 'Form not found' });
-    if (!form.isActive) return res.status(403).json({ error: 'Form is inactive' });
+    
+    // Handle deleted state
+    if (form.isDeleted) {
+      return res.status(410).json({ 
+        error: 'Form deleted',
+        status: 'deleted',
+        message: 'This form has been deleted and is no longer available.'
+      });
+    }
+
+    // Handle paused/inactive state (using isPublished for pause logic based on user request)
+    // User requested: "pausar formulario".
+    // We assume !isPublished = Paused (if it was published before, or just draft).
+    // Or we can check isActive.
+    // Let's use !isPublished OR !isActive as "Unavailable".
+    if (!form.isPublished || !form.isActive) {
+      return res.status(403).json({ 
+        error: 'Form is inactive',
+        status: 'paused',
+        message: 'This form is currently paused or not accepting submissions.'
+      });
+    }
 
     // No devolvemos info sensible del usuario creador, solo lo necesario
     res.json(form);

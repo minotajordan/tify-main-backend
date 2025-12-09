@@ -454,6 +454,7 @@ model Form {
   isActive       Boolean  @default(true) @map("is_active")
   isPublished    Boolean  @default(false) @map("is_published")
   wasPublished   Boolean  @default(false) @map("was_published")
+  isDeleted      Boolean  @default(false) @map("is_deleted")
   expiresAt      DateTime? @map("expires_at")
   userId         String   @map("user_id")
   createdAt      DateTime @default(now()) @map("created_at")
