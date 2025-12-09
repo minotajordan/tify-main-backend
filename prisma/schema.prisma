@@ -455,6 +455,7 @@ model Form {
   isPublished    Boolean  @default(false) @map("is_published")
   wasPublished   Boolean  @default(false) @map("was_published")
   isDeleted      Boolean  @default(false) @map("is_deleted")
+  collectUserInfo Boolean @default(false) @map("collect_user_info")
   expiresAt      DateTime? @map("expires_at")
   userId         String   @map("user_id")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -488,6 +489,11 @@ model FormSubmission {
   id        String   @id @default(uuid())
   formId    String   @map("form_id")
   data      Json
+  ipAddress String?  @map("ip_address")
+  country   String?
+  city      String?
+  userAgent String?  @map("user_agent")
+  deviceInfo Json?   @map("device_info")
   createdAt DateTime @default(now()) @map("created_at")
 
   form Form @relation(fields: [formId], references: [id], onDelete: Cascade)

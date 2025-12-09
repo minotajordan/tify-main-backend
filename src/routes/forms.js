@@ -62,7 +62,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Crear un nuevo formulario
 router.post('/', authenticate, async (req, res) => {
-  const { title, description, headerContent, footerContent, successMessage, expiresAt, isPublished, wasPublished, fields } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
   const slug = Math.random().toString(36).substring(2, 10); // Simple slug generation
 
   try {
@@ -76,6 +76,7 @@ router.post('/', authenticate, async (req, res) => {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         isPublished: isPublished || false,
         wasPublished: wasPublished || isPublished || false,
+        collectUserInfo: collectUserInfo || false,
         slug,
         userId: req.user.id,
         fields: {
@@ -102,7 +103,7 @@ router.post('/', authenticate, async (req, res) => {
 // Actualizar un formulario
 router.put('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
-  const { title, description, headerContent, footerContent, successMessage, isActive, expiresAt, isPublished, wasPublished, fields } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, isActive, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
 
   try {
     const existingForm = await prisma.form.findUnique({ where: { id } });
@@ -123,6 +124,7 @@ router.put('/:id', authenticate, async (req, res) => {
           isActive,
           isPublished,
           wasPublished,
+          collectUserInfo,
           expiresAt: expiresAt ? new Date(expiresAt) : null
         }
       });
@@ -219,7 +221,11 @@ router.get('/public/:slug', async (req, res) => {
 // Enviar respuesta al formulario
 router.post('/public/:slug/submit', async (req, res) => {
   const { slug } = req.params;
-  const { data } = req.body;
+  const { data, deviceInfo, country, city } = req.body;
+  
+  // Extract tracking info
+  const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'];
 
   try {
     const form = await prisma.form.findUnique({ where: { slug } });
@@ -228,7 +234,12 @@ router.post('/public/:slug/submit', async (req, res) => {
     const submission = await prisma.formSubmission.create({
       data: {
         formId: form.id,
-        data: data
+        data: data,
+        ipAddress: ipAddress ? (Array.isArray(ipAddress) ? ipAddress[0] : ipAddress.split(',')[0].trim()) : null,
+        userAgent,
+        deviceInfo: deviceInfo || undefined,
+        country: country || null,
+        city: city || null
       }
     });
 
@@ -254,8 +265,26 @@ router.get('/:id/submissions', authenticate, async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json(submissions);
+    // If tracking is not enabled by the user, we redact the sensitive columns
+    // The data is still in DB (available to Admin/System), but not shown to the Form Owner via API
+    // unless they enabled 'collectUserInfo'
+    const cleanSubmissions = submissions.map(sub => {
+      if (!form.collectUserInfo) {
+        return {
+          ...sub,
+          ipAddress: null,
+          userAgent: null,
+          country: null,
+          city: null,
+          deviceInfo: null
+        };
+      }
+      return sub;
+    });
+
+    res.json(cleanSubmissions);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error fetching submissions' });
   }
 });
