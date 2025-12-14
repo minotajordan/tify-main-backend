@@ -16,6 +16,8 @@ const organizationRoutes = require('./routes/organizations');
 const appRoutes = require('./routes/app');
 const formRoutes = require('./routes/forms');
 const eventRoutes = require('./routes/events');
+const ticketRoutes = require('./routes/tickets');
+const uploadRoutes = require('./routes/upload');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -175,6 +177,8 @@ app.use('/api/organizations', organizationRoutes);
 app.use('/api/app', appRoutes);
 app.use('/api/forms', formRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.get('/api/streams/user-requests/:id/events/:eventId', (req, res) => {
   const { id, eventId } = req.params;

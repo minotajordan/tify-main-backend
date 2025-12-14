@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/database');
 const jwt = require('jsonwebtoken');
+const { sendPurchaseConfirmation } = require('../services/emailService');
 
 // Helper to get user ID from token
 const getUserId = (req) => {
@@ -67,6 +68,78 @@ router.get('/:id', async (req, res) => {
     res.json(event);
   } catch (error) {
     console.error('Error getting event:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/events/:id/tickets - List all tickets for an event
+router.get('/:id/tickets', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tickets = await prisma.ticket.findMany({
+      where: { eventId: id },
+      include: {
+        zone: true,
+        seat: true,
+        purchase: true
+      },
+      orderBy: { purchaseDate: 'desc' }
+    });
+    res.json(tickets);
+  } catch (error) {
+    console.error('Error getting tickets:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/events/:id/check-in - Check in a ticket
+router.post('/:id/check-in', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code } = req.body; // Ticket ID or QR code value
+
+    // Find ticket by ID or QR code
+    const ticket = await prisma.ticket.findFirst({
+      where: {
+        eventId: id,
+        OR: [
+          { id: code },
+          { qrCode: code }
+        ]
+      },
+      include: {
+        zone: true,
+        seat: true
+      }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket no encontrado' });
+    }
+
+    if (ticket.status === 'USED' || ticket.status === 'REFUNDED' || ticket.status === 'CANCELLED') {
+      return res.status(400).json({ 
+        error: `Ticket inválido (Estado: ${ticket.status})`,
+        ticket 
+      });
+    }
+
+    // Update status
+    const updatedTicket = await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        status: 'USED',
+        checkInTime: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Acceso concedido',
+      ticket: updatedTicket
+    });
+  } catch (error) {
+    console.error('Error checking in:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -193,6 +266,8 @@ router.put('/:id/layout', async (req, res) => {
               type: z.type || 'SALE',
               layout: z.layout || { x: 0, y: 0 },
               seatGap: z.seatGap !== undefined ? parseInt(z.seatGap) : 4,
+              seatGapX: z.seatGapX !== undefined ? parseInt(z.seatGapX) : (z.seatGap !== undefined ? parseInt(z.seatGap) : 4),
+              seatGapY: z.seatGapY !== undefined ? parseInt(z.seatGapY) : (z.seatGap !== undefined ? parseInt(z.seatGap) : 4),
               startNumber: z.startNumber !== undefined ? parseInt(z.startNumber) : 1,
               numberingDirection: z.numberingDirection || 'LTR',
               verticalDirection: z.verticalDirection || 'TTB',
@@ -265,6 +340,12 @@ router.post('/:id/purchase', async (req, res) => {
       return res.status(400).json({ error: 'No items in cart' });
     }
 
+    // Verify event exists
+    const eventExists = await prisma.event.findUnique({ where: { id } });
+    if (!eventExists) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
     const tickets = [];
 
     await prisma.$transaction(async (tx) => {
@@ -276,79 +357,158 @@ router.post('/:id/purchase', async (req, res) => {
         }
       }
 
-      for (const [zoneId, count] of Object.entries(zoneCounts)) {
-        const zone = await tx.eventZone.findUnique({
-          where: { id: zoneId },
+      const zoneIdsToCheck = Object.keys(zoneCounts);
+      if (zoneIdsToCheck.length > 0) {
+        const zonesToCheck = await tx.eventZone.findMany({
+          where: { id: { in: zoneIdsToCheck } },
           include: { _count: { select: { tickets: true } } }
         });
 
-        if (!zone) throw new Error(`Zone ${zoneId} not found`);
-        
-        // Check if (current_sold + requested_in_batch) > capacity
-        if (zone.capacity && (zone._count.tickets + count > zone.capacity)) {
-          throw new Error(`Zona ${zone.name}: Solo quedan ${zone.capacity - zone._count.tickets} boletos disponibles (solicitados: ${count})`);
-        }
-      }
-
-      // 2. Process all items
-      for (const item of items) {
-        // Generate unique QR code data
-        const qrCode = `${id}-${item.zoneId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-        if (item.type === 'seat') {
-          // Check if seat is available
-          const seat = await tx.eventSeat.findUnique({
-            where: { id: item.id }
-          });
-
-          if (!seat) throw new Error(`Seat ${item.id} not found`);
-          if (seat.status !== 'AVAILABLE') throw new Error(`Seat ${seat.rowLabel}${seat.colLabel} is no longer available`);
-
-          // Update seat status
-          await tx.eventSeat.update({
-            where: { id: item.id },
-            data: { 
-              status: 'SOLD',
-              holderName: customer.fullName,
-              ticketCode: qrCode
-            }
-          });
-
-          // Create Ticket
-          const ticket = await tx.ticket.create({
-            data: {
-              eventId: id,
-              zoneId: item.zoneId,
-              seatId: item.id,
-              customerName: customer.fullName,
-              customerEmail: customer.email,
-              price: item.price,
-              status: 'VALID',
-              qrCode
-            }
-          });
-          tickets.push(ticket);
-
-        } else if (item.type === 'general') {
-          // Double check not strictly needed if pre-check passed, but good for safety if logic changes
-          // Skipping redundant DB call here for performance since we pre-validated the batch.
+        for (const zoneId of zoneIdsToCheck) {
+          const zone = zonesToCheck.find(z => z.id === zoneId);
+          if (!zone) throw new Error(`Zona no encontrada (ID: ${zoneId})`);
           
-          // Create Ticket
-          const ticket = await tx.ticket.create({
-            data: {
-              eventId: id,
-              zoneId: item.zoneId,
-              customerName: customer.fullName,
-              customerEmail: customer.email,
-              price: item.price,
-              status: 'VALID',
-              qrCode
-            }
-          });
-          tickets.push(ticket);
+          const count = zoneCounts[zoneId];
+          // Check if (current_sold + requested_in_batch) > capacity
+          if (zone.capacity !== null && (zone._count.tickets + count > zone.capacity)) {
+            const remaining = Math.max(0, zone.capacity - zone._count.tickets);
+            throw new Error(`Zona ${zone.name}: Solo quedan ${remaining} boletos disponibles (solicitados: ${count})`);
+          }
         }
       }
+
+      // 2. Create Purchase Record
+      const purchase = await tx.ticketPurchase.create({
+        data: {
+          eventId: id,
+          billingName: customer.fullName,
+          billingEmail: customer.email,
+          billingPhone: customer.phone || '',
+          billingDocId: customer.docId || '',
+          totalAmount: items.reduce((sum, item) => sum + parseFloat(item.price), 0)
+        }
+      });
+
+      // 3. Optimization: Batch process items to reduce DB round-trips
+      const seatItems = items.filter(i => i.type === 'seat');
+      const generalItems = items.filter(i => i.type === 'general');
+      const ticketsToCreate = [];
+      const seatUpdates = [];
+
+      // Process Seats (Batch Fetch & Update)
+      if (seatItems.length > 0) {
+        const seatIds = seatItems.map(i => i.id);
+        
+        // Fetch all seats in one query
+        const dbSeats = await tx.eventSeat.findMany({
+          where: { id: { in: seatIds } }
+        });
+
+        // Validate all seats exist
+        if (dbSeats.length !== seatIds.length) {
+          // Find which one is missing for better error message
+          const foundIds = new Set(dbSeats.map(s => s.id));
+          const missingId = seatIds.find(id => !foundIds.has(id));
+          throw new Error(`Seat ${missingId} not found`);
+        }
+
+        // Validate availability
+        const unavailableSeat = dbSeats.find(s => s.status !== 'AVAILABLE');
+        if (unavailableSeat) {
+          throw new Error(`Seat ${unavailableSeat.rowLabel}${unavailableSeat.colLabel} is no longer available`);
+        }
+
+        // Prepare updates and tickets
+        for (const item of seatItems) {
+          const qrCode = `${id}-${item.zoneId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Queue seat update (Parallel execution later)
+          seatUpdates.push(
+            tx.eventSeat.update({
+              where: { id: item.id },
+              data: { 
+                status: 'SOLD',
+                holderName: customer.fullName,
+                ticketCode: qrCode
+              }
+            })
+          );
+
+          // Add to ticket creation list
+          ticketsToCreate.push({
+            eventId: id,
+            zoneId: item.zoneId,
+            seatId: item.id,
+            purchaseId: purchase.id,
+            customerName: customer.fullName,
+            customerEmail: customer.email,
+            ownerName: customer.fullName,
+            ownerEmail: customer.email,
+            ownerPhone: customer.phone || '',
+            ownerDocId: customer.docId || '',
+            price: item.price,
+            status: 'VALID',
+            qrCode
+          });
+        }
+      }
+
+      // Process General Admission
+      for (const item of generalItems) {
+        const qrCode = `${id}-${item.zoneId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        ticketsToCreate.push({
+          eventId: id,
+          zoneId: item.zoneId,
+          purchaseId: purchase.id,
+          customerName: customer.fullName,
+          customerEmail: customer.email,
+          ownerName: customer.fullName,
+          ownerEmail: customer.email,
+          ownerPhone: customer.phone || '',
+          ownerDocId: customer.docId || '',
+          price: item.price,
+          status: 'VALID',
+          qrCode
+        });
+      }
+
+      // Execute all database operations
+      // 1. Update all seats in parallel
+      if (seatUpdates.length > 0) {
+        await Promise.all(seatUpdates);
+      }
+
+      // 2. Create all tickets
+      if (ticketsToCreate.length > 0) {
+        // We use Promise.all instead of createMany to get the created ticket objects with IDs
+        // This is necessary so the frontend can immediately perform actions like Transfer on the new tickets
+        const createdTickets = await Promise.all(
+          ticketsToCreate.map(data => tx.ticket.create({ data }))
+        );
+        
+        tickets.push(...createdTickets);
+      }
+    }, {
+      maxWait: 5000,
+      timeout: 20000
     });
+
+    // Send confirmation email asynchronously (don't block response)
+    // We need to pass the purchase object and tickets. 
+    // Since `purchase` variable is inside transaction scope, we need to extract it or reconstruct.
+    // However, `purchase` is not available here. 
+    // Let's refactor slightly to return purchase from transaction or just use the data we have.
+    // We have `customer` and `items` and `tickets` (the array we pushed to).
+    
+    // Actually, `purchase` is created inside.
+    // Let's just mock the purchase object for the email or move the variable out.
+    // Better yet, just use the data we have available.
+    const purchaseData = {
+      billingName: customer.fullName,
+      totalAmount: items.reduce((sum, item) => sum + parseFloat(item.price), 0)
+    };
+    
+    sendPurchaseConfirmation(customer.email, purchaseData, tickets).catch(console.error);
 
     res.json({ success: true, tickets });
   } catch (error) {

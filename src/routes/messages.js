@@ -133,7 +133,8 @@ router.post('/', async (req, res) => {
       attachments = [],
       eventAt,
       publishedAt: publishedAtInput,
-      expiresAt: expiresAtInput
+      expiresAt: expiresAtInput,
+      extra
     } = req.body;
 
     if (publishedAtInput && new Date(publishedAtInput) <= new Date()) {
@@ -201,7 +202,8 @@ router.post('/', async (req, res) => {
         deliveryMethod,
         eventAt: eventAt ? new Date(eventAt) : null,
         state: 'ACTIVE',
-        publishedAt
+        publishedAt,
+        extra
       },
       include: {
         sender: { select: { id: true, username: true, fullName: true } },
@@ -359,7 +361,8 @@ router.put('/:id', async (req, res) => {
       priority,
       isImmediate,
       deliveryMethod,
-      eventAt
+      eventAt,
+      extra
     } = req.body;
 
     const existing = await prisma.message.findUnique({
@@ -370,7 +373,8 @@ router.put('/:id', async (req, res) => {
         categoryId: true,
         priority: true,
         isImmediate: true,
-        deliveryMethod: true
+        deliveryMethod: true,
+        extra: true
       }
     });
     if (!existing) return res.status(404).json({ error: 'Mensaje no encontrado' });
@@ -383,7 +387,8 @@ router.put('/:id', async (req, res) => {
         previousCategoryId: existing.categoryId,
         previousPriority: existing.priority,
         previousIsImmediate: existing.isImmediate,
-        previousDeliveryMethod: existing.deliveryMethod
+        previousDeliveryMethod: existing.deliveryMethod,
+        previousExtra: existing.extra
       }
     });
 
@@ -395,7 +400,8 @@ router.put('/:id', async (req, res) => {
         priority: priority ?? existing.priority,
         isImmediate: typeof isImmediate === 'boolean' ? isImmediate : existing.isImmediate,
         deliveryMethod: deliveryMethod ?? existing.deliveryMethod,
-        eventAt: eventAt ? new Date(eventAt) : undefined
+        eventAt: eventAt ? new Date(eventAt) : undefined,
+        extra: extra ?? existing.extra
       },
       include: {
         sender: { select: { id: true, username: true, fullName: true } },
