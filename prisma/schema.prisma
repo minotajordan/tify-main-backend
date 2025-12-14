@@ -541,6 +541,12 @@ model EventZone {
   seatGap   Int?     @default(4) @map("seat_gap")
   startNumber Int    @default(1) @map("start_number")
   numberingDirection String @default("LTR") @map("numbering_direction") // LTR, RTL
+  verticalDirection String @default("TTB") @map("vertical_direction") // TTB, BTT
+  numberingMode String @default("ROW") @map("numbering_mode") // ROW, COLUMN
+  continuousNumbering Boolean @default(false) @map("continuous_numbering")
+  numberingSnake Boolean @default(false) @map("numbering_snake")
+  rowLabelType String @default("Alpha") @map("row_label_type") // Alpha, Numeric, Roman
+  rotation    Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -562,6 +568,8 @@ model EventSeat {
   price     Float?     // Override
   x         Int?       // For free-form placement
   y         Int?       // For free-form placement
+  gridRow   Int?       @map("grid_row")
+  gridCol   Int?       @map("grid_col")
   holderName String?   @map("holder_name")
   ticketCode String?   @map("ticket_code")
   createdAt DateTime   @default(now()) @map("created_at")

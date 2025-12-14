@@ -194,7 +194,13 @@ router.put('/:id/layout', async (req, res) => {
               layout: z.layout || { x: 0, y: 0 },
               seatGap: z.seatGap !== undefined ? parseInt(z.seatGap) : 4,
               startNumber: z.startNumber !== undefined ? parseInt(z.startNumber) : 1,
-              numberingDirection: z.numberingDirection || 'LTR'
+              numberingDirection: z.numberingDirection || 'LTR',
+              verticalDirection: z.verticalDirection || 'TTB',
+              numberingMode: z.numberingMode || 'ROW',
+              continuousNumbering: z.continuousNumbering || false,
+              numberingSnake: z.numberingSnake || false,
+              rowLabelType: z.rowLabelType || 'Alpha',
+              rotation: parseInt(z.rotation || 0)
             }
           });
           zoneMap.set(z.id, createdZone.id);
@@ -216,7 +222,9 @@ router.put('/:id/layout', async (req, res) => {
             type: s.type || 'REGULAR',
             price: s.price ? parseFloat(s.price) : null,
             x: s.x !== undefined ? parseInt(s.x) : null,
-            y: s.y !== undefined ? parseInt(s.y) : null
+            y: s.y !== undefined ? parseInt(s.y) : null,
+            gridRow: s.gridRow !== undefined ? parseInt(s.gridRow) : null,
+            gridCol: s.gridCol !== undefined ? parseInt(s.gridCol) : null
           };
         }).filter(Boolean);
         
@@ -226,6 +234,9 @@ router.put('/:id/layout', async (req, res) => {
           });
         }
       }
+    }, {
+      maxWait: 5000, // default: 2000
+      timeout: 20000 // default: 5000
     });
 
     const updatedEvent = await prisma.event.findUnique({
