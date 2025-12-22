@@ -390,3 +390,14 @@ La app móvil ahora se conectará a este backend en lugar de directamente a Supa
   Debes especificar que el evento macro incluye tiketins, pagos reserva de sillas y varias cositas muy profesionales que es basicamente lo que ya esta 
 
   Y el evento local, incluye plantillas para cumpelaños, grados y cosas de este estilo, aqupi tambien se podra hacer reservas al compartir un link unico, se podra generar plantillas o crear plantillas para el evento, estas se enviaran en un link de acceso publico y se podra subir en la creacion den evento local, numeros, pais, nombres del invitado, cupos, para que al que se pueda tener un link unico y especial para cada invitado, de modo que al ingresar el ivitado ya esta identificado, y podra ver inforamcion del evento y confirmar desde allí su asistencia, es imporante que se añada el flujo de limite de asistentes, o nombdes de los invitado y cupos para esa invitacion
+
+
+  ------------
+
+  Necesito que me construtes todo un modulo para gestionar como acortador de Link y QR para poder tener un control de creacion, así puedo crear muchos link acortando direcciones web y que estos genere un QR, la idea es poder garantizar que rutas muy largas quedaran mucho cortas, mi url es tify.pro/L423SA
+  Toda la ruta que inicie inmediatamente despues de dominio / que tenga un L mayuscula significa que es para Redireccionar.
+
+  Este debe permitirme, links directos y links con tiempo, estos links claramnete tengan un QR ATADO que llevara a ese link, el link acortador podra ser modificado para cambiar el sitio al cual redirigie y me debe de permitir tener un historial de cambios, ademas de permitirme definit que quiero mostrar antes de que redireccione a la pagina o si quiero que se redieccione de inmediato.
+  Recuerda que cuando redireccione es necesario.
+
+  El usuario debe de tener la opcion de crear QR y automaticamnte este QR tendra un link cortico atado para que se cierre el flujo actuando com un ecosistema.

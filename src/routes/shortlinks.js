@@ -106,6 +106,109 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Extract metadata from URL
+router.post('/extract-metadata', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL requerida' });
+    
+    // Validate URL format
+    try {
+      new URL(url);
+    } catch {
+      return res.status(400).json({ error: 'URL inválida' });
+    }
+
+    const response = await fetch(url, { headers: { 'User-Agent': 'TifyBot/1.0' } });
+    if (!response.ok) throw new Error('Failed to fetch URL');
+    const html = await response.text();
+    
+    // Simple regex extraction
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i) || 
+                       html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+    const title = titleMatch ? titleMatch[1] : '';
+    
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
+                      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+    const description = descMatch ? descMatch[1] : '';
+    
+    const imgMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+    const image = imgMatch ? imgMatch[1] : '';
+
+    res.json({ title, description, image });
+  } catch (error) {
+    console.error('Metadata extraction error:', error);
+    // Return empty but success to avoid breaking UI
+    res.json({ title: '', description: '', image: '' });
+  }
+});
+
+// Get global stats (Dashboard)
+router.get('/stats', async (req, res) => {
+  try {
+    const { createdBy } = req.query;
+    const whereUser = createdBy ? { createdBy } : {};
+    
+    // For visits, we filter by the shortLink's creator
+    const whereVisits = createdBy ? { shortLink: { createdBy } } : {};
+
+    const [totalLinks, totalClicks, activeLinks, recentVisits] = await Promise.all([
+      prisma.shortLink.count({ where: whereUser }),
+      prisma.shortLinkVisit.count({ where: whereVisits }),
+      prisma.shortLink.count({ where: { ...whereUser, isActive: true } }),
+      prisma.shortLinkVisit.findMany({
+        where: whereVisits,
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { shortLink: { select: { code: true, targetUrl: true } } }
+      })
+    ]);
+
+    // Chart data: last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const visitsRange = await prisma.shortLinkVisit.findMany({
+      where: { 
+        ...whereVisits,
+        createdAt: { gte: thirtyDaysAgo }
+      },
+      select: { createdAt: true }
+    });
+    
+    const historyMap = {};
+    // Initialize last 30 days with 0
+    for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        historyMap[dateStr] = 0;
+    }
+
+    visitsRange.forEach(v => {
+      const date = v.createdAt.toISOString().split('T')[0];
+      if (historyMap[date] !== undefined) {
+        historyMap[date]++;
+      }
+    });
+    
+    const chartData = Object.entries(historyMap)
+        .map(([date, count]) => ({ date, count }))
+        .sort((a,b) => a.date.localeCompare(b.date));
+
+    res.json({
+      totalLinks,
+      totalClicks,
+      activeLinks,
+      recentVisits,
+      chartData
+    });
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ error: 'Error fetching stats', details: error.message });
+  }
+});
+
 // List short links (optionally by creator)
 router.get('/', async (req, res) => {
   try {
@@ -326,6 +429,10 @@ router.get('/L:code', async (req, res) => {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${title}</title>
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${message}">
+  <meta property="og:image" content="${s.bannerImageUrl || ''}">
+  <meta name="twitter:card" content="summary_large_image">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin:0; padding:0; background:#0f172a; color:#e2e8f0; }
     .wrap { max-width: 660px; margin: 0 auto; padding: 24px; }

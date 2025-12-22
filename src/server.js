@@ -208,21 +208,61 @@ app.get('/L:code', async (req, res) => {
         }
       });
     } catch {}
-    if (s.redirectMode === 'IMMEDIATE') {
+    // Bot detection to serve meta tags even if redirectMode is IMMEDIATE
+    const userAgent = req.headers['user-agent'] || '';
+    const isBot = /bot|googlebot|crawler|spider|robot|crawling|facebookexternalhit|whatsapp|twitterbot|telegram|discordbot/i.test(userAgent);
+
+    if (s.redirectMode === 'IMMEDIATE' && !isBot) {
       return res.redirect(302, s.targetUrl);
     }
     const title = s.interstitialTitle || 'Redirección';
     const message =
       s.interstitialMessage ||
       'Serás redirigido al destino. Si no ocurre automáticamente, usa el botón.';
+    const image = s.bannerImageUrl || '';
+    
     const html = `<!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title></head>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title}</title>
+  <meta name="description" content="${message}">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${req.protocol}://${req.get('host')}/L${s.code}">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${message}">
+  <meta property="og:image" content="${image}">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="${req.protocol}://${req.get('host')}/L${s.code}">
+  <meta property="twitter:title" content="${title}">
+  <meta property="twitter:description" content="${message}">
+  <meta property="twitter:image" content="${image}">
+  
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb; color: #111827; }
+    .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; text-align: center; }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    p { color: #6b7280; margin-bottom: 1.5rem; }
+    .btn { display: inline-block; background: #4f46e5; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 500; transition: background 0.2s; }
+    .btn:hover { background: #4338ca; }
+    img.banner { max-width: 100%; border-radius: 0.5rem; margin-bottom: 1rem; object-fit: cover; max-height: 200px; }
+  </style>
+</head>
 <body>
-  <h1>${title}</h1>
-  <p>${message}</p>
-  <a href="${s.targetUrl}">Ir ahora</a>
-  <script>setTimeout(function(){ window.location.href='${s.targetUrl}'; }, 2000);</script>
-</body></html>`;
+  <div class="card">
+    ${image ? `<img src="${image}" alt="Banner" class="banner">` : ''}
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <a href="${s.targetUrl}" class="btn">Ir ahora</a>
+  </div>
+  <script>setTimeout(function(){ window.location.href='${s.targetUrl}'; }, 3000);</script>
+</body>
+</html>`;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
