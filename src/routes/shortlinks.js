@@ -5,11 +5,20 @@ const jwt = require('jsonwebtoken');
 const QRCode = require('qrcode');
 
 const getDomain = (req) => {
-  const envDomain = process.env.SHORTLINK_DOMAIN || 'tify.pro';
-  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-  if (!host) return envDomain;
-  // Prefer env; fall back to host when running locally
-  return envDomain || host.split(':')[0];
+  // If explicitly set in env (e.g. for custom domain in production), use it
+  if (process.env.SHORTLINK_DOMAIN) return process.env.SHORTLINK_DOMAIN;
+  
+  // Otherwise, infer from request headers (works for localhost and Vercel/proxies)
+  const forwardedHost = req.headers['x-forwarded-host'];
+  if (forwardedHost) return Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost;
+  
+  return req.headers.host || 'board.tify.pro';
+};
+
+const getProtocol = (req) => {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  if (forwardedProto) return Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  return req.protocol || 'https';
 };
 
 const generateCode = async () => {
@@ -121,10 +130,11 @@ router.get('/', async (req, res) => {
       prisma.shortLink.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: l }),
       prisma.shortLink.count({ where })
     ]);
+    const protocol = getProtocol(req);
     res.json({
       items: items.map((s) => ({
         ...s,
-        shortUrl: `https://${getDomain(req)}/L${s.code}`
+        shortUrl: `${protocol}://${getDomain(req)}/L${s.code}`
       })),
       pagination: { page: p, limit: l, total, pages: Math.ceil(total / l) }
     });
@@ -140,9 +150,10 @@ router.get('/:id', async (req, res) => {
     const s = await prisma.shortLink.findUnique({ where: { id } });
     if (!s) return res.status(404).json({ error: 'Shortlink no encontrado' });
     const qr = await prisma.shortLinkQr.findUnique({ where: { shortLinkId: id } }).catch(() => null);
+    const protocol = getProtocol(req);
     res.json({
       ...s,
-      shortUrl: `https://${getDomain(req)}/L${s.code}`,
+      shortUrl: `${protocol}://${getDomain(req)}/L${s.code}`,
       qr: qr ? { format: qr.format, data: qr.data } : null
     });
   } catch (error) {
@@ -184,6 +195,8 @@ router.patch('/:id', async (req, res) => {
         ? 'TARGET_UPDATE'
         : 'redirectMode' in data
         ? 'MODE_UPDATE'
+        : 'interstitialTitle' in data || 'interstitialMessage' in data || 'bannerImageUrl' in data
+        ? 'INTERSTITIAL_UPDATE'
         : 'activeFrom' in data || 'expiresAt' in data
         ? 'WINDOW_UPDATE'
         : 'isActive' in data
@@ -200,9 +213,10 @@ router.patch('/:id', async (req, res) => {
         newValues: updated
       }
     });
+    const protocol = getProtocol(req);
     res.json({
       ...updated,
-      shortUrl: `https://${getDomain(req)}/L${updated.code}`
+      shortUrl: `${protocol}://${getDomain(req)}/L${updated.code}`
     });
   } catch (error) {
     res.status(500).json({ error: 'Error actualizando shortlink', details: error.message });
@@ -240,7 +254,8 @@ router.post('/:id/qr', async (req, res) => {
     const { id } = req.params;
     const s = await prisma.shortLink.findUnique({ where: { id } });
     if (!s) return res.status(404).json({ error: 'Shortlink no encontrado' });
-    const url = `https://${getDomain(req)}/L${s.code}`;
+    const protocol = getProtocol(req);
+    const url = `${protocol}://${getDomain(req)}/L${s.code}`;
     const svg = await QRCode.toString(url, { type: 'svg' });
     const qr = await prisma.shortLinkQr.upsert({
       where: { shortLinkId: id },
