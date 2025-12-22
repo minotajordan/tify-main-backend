@@ -38,6 +38,70 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/events/by-token/:token - Get event by guest token and increment access count
+router.get('/by-token/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // 1. Find the guest by token
+    const guest = await prisma.guest.findUnique({
+      where: { token },
+      include: {
+        event: {
+          include: {
+            organizer: {
+              select: { id: true, username: true, fullName: true }
+            },
+            zones: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                seats: true,
+                _count: {
+                  select: { tickets: true }
+                }
+              }
+            },
+            seats: true,
+            guests: true
+          }
+        }
+      }
+    });
+
+    if (!guest) {
+      return res.status(404).json({ error: 'Invitación no encontrada' });
+    }
+
+    // 2. Increment access count for this guest
+    await prisma.guest.update({
+      where: { token },
+      data: {
+        linkAccessCount: {
+          increment: 1
+        }
+      }
+    });
+
+    const event = guest.event;
+
+    // Map guests to guestList for frontend compatibility
+    if (event.guests) {
+      event.guestList = event.guests;
+    }
+
+    // Return the event (and potentially the guest info specifically if needed, but the frontend likely just needs the event to start)
+    // We can also attach the current guest to the response so the frontend knows who is accessing
+    res.json({
+      ...event,
+      currentGuest: guest
+    });
+
+  } catch (error) {
+    console.error('Error getting event by token:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/events/:id - Get event details
 router.get('/:id', async (req, res) => {
   try {
@@ -57,12 +121,18 @@ router.get('/:id', async (req, res) => {
             }
           }
         },
-        seats: true
+        seats: true,
+        guests: true
       }
     });
 
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Map guests to guestList for frontend compatibility
+    if (event.guests) {
+      event.guestList = event.guests;
     }
 
     res.json(event);
@@ -173,7 +243,14 @@ router.post('/', async (req, res) => {
       location,
       categories,
       paymentInfo,
-      status
+      status,
+      // Local Event Fields
+      privacy,
+      password,
+      guestsPerInviteMode,
+      guestsPerInvite,
+      reservationMode,
+      guestList
     } = req.body;
 
     const event = await prisma.event.create({
@@ -186,9 +263,40 @@ router.post('/', async (req, res) => {
         categories: categories || [],
         paymentInfo,
         status: status || 'DRAFT',
-        organizerId: organizerId
+        organizerId: organizerId,
+        
+        // Local Event Fields
+        privacy,
+        password,
+        guestsPerInviteMode,
+        guestsPerInvite: guestsPerInvite ? parseInt(guestsPerInvite) : 1,
+        reservationMode,
+
+        // Create guests
+        guests: guestList && guestList.length > 0 ? {
+          create: guestList.map(g => ({
+            name: g.name,
+            email: g.email,
+            phoneNumber: g.phoneNumber,
+            country: g.country,
+            quota: g.quota ? parseInt(g.quota) : 1,
+            status: g.status || 'pending',
+            token: g.token,
+            additionalData: g.additionalData,
+            linkAccessCount: g.linkAccessCount || 0,
+            infoFilled: g.infoFilled || false
+          }))
+        } : undefined
+      },
+      include: {
+        guests: true
       }
     });
+
+    // Map guests to guestList for frontend compatibility
+    if (event.guests) {
+      event.guestList = event.guests;
+    }
 
     res.status(201).json(event);
   } catch (error) {
@@ -209,27 +317,65 @@ router.put('/:id', async (req, res) => {
       location,
       categories,
       paymentInfo,
-      status
+      status,
+      // Local Event Fields
+      privacy,
+      password,
+      guestsPerInviteMode,
+      guestsPerInvite,
+      reservationMode,
+      guestList
     } = req.body;
+
+    const updateData = {
+      title,
+      description,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      location,
+      categories,
+      paymentInfo,
+      status,
+      privacy,
+      password,
+      guestsPerInviteMode,
+      guestsPerInvite: guestsPerInvite ? parseInt(guestsPerInvite) : undefined,
+      reservationMode
+    };
+
+    if (guestList) {
+      updateData.guests = {
+        deleteMany: {},
+        create: guestList.map(g => ({
+          name: g.name,
+          email: g.email,
+          phoneNumber: g.phoneNumber,
+          country: g.country,
+          quota: g.quota ? parseInt(g.quota) : 1,
+          status: g.status || 'pending',
+          token: g.token,
+          additionalData: g.additionalData,
+          linkAccessCount: g.linkAccessCount || 0,
+          infoFilled: g.infoFilled || false
+        }))
+      };
+    }
 
     const event = await prisma.event.update({
       where: { id },
-      data: {
-        title,
-        description,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        location,
-        categories,
-        paymentInfo,
-        status
-      },
+      data: updateData,
       include: {
         organizer: { select: { id: true, username: true, fullName: true } },
         zones: { include: { seats: true } },
-        seats: true
+        seats: true,
+        guests: true
       }
     });
+
+    // Map guests to guestList for frontend compatibility
+    if (event.guests) {
+      event.guestList = event.guests;
+    }
 
     res.json(event);
   } catch (error) {
@@ -583,6 +729,33 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true, message: 'Event deleted successfully' });
   } catch (error) {
     console.error('Error deleting event:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/events/guests/:id - Update guest details
+router.put('/guests/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phoneNumber, country, quota, status, additionalData, infoFilled } = req.body;
+
+    const updatedGuest = await prisma.guest.update({
+      where: { id },
+      data: {
+        name,
+        email,
+        phoneNumber,
+        country,
+        quota: quota ? parseInt(quota) : undefined,
+        status,
+        additionalData,
+        infoFilled
+      }
+    });
+
+    res.json({ success: true, guest: updatedGuest });
+  } catch (error) {
+    console.error('Error updating guest:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

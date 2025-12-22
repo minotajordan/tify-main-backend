@@ -526,8 +526,37 @@ model Event {
   seats       EventSeat[]
   tickets     Ticket[]
   purchases   TicketPurchase[]
+  guests      Guest[]
+
+  // Local Event Fields
+  privacy             String?   @default("public") // public, private_password, private_link
+  password            String?
+  guestsPerInviteMode String?   @map("guests_per_invite_mode") // fixed, variable
+  guestsPerInvite     Int?      @default(1) @map("guests_per_invite")
+  reservationMode     String?   @map("reservation_mode") // automatic, approval
 
   @@map("tify_events")
+}
+
+model Guest {
+  id              String   @id @default(uuid())
+  eventId         String   @map("event_id")
+  name            String
+  email           String?
+  phoneNumber     String?  @map("phone_number")
+  country         String?
+  quota           Int      @default(1)
+  status          String   @default("pending") // pending, confirmed, declined, attended
+  token           String?  @unique // For unique invite links
+  additionalData  Json?    @map("additional_data")
+  linkAccessCount Int      @default(0) @map("link_access_count")
+  infoFilled      Boolean  @default(false) @map("info_filled")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("tify_guests")
 }
 
 model TicketPurchase {

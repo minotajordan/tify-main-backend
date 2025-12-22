@@ -387,6 +387,6 @@ La app móvil ahora se conectará a este backend en lugar de directamente a Supa
   Es necesario que se pueda tener un apartado para que al crear un evento se pueda generar eventos para cumpleaños, días especiales, etc.
 
   de esta manera el apartado de generar un evento, al darle click en "Nuevo evento", me mostrar un modal muy hermoso, con el cual podre elegir si sera un evento macro, o un cumpleaños o evento loca,
-  Debes especificar que el evento macro incluye tiketins, pagos reserva de sillas y varias cositas muy profesionales
+  Debes especificar que el evento macro incluye tiketins, pagos reserva de sillas y varias cositas muy profesionales que es basicamente lo que ya esta 
 
   Y el evento local, incluye plantillas para cumpelaños, grados y cosas de este estilo, aqupi tambien se podra hacer reservas al compartir un link unico, se podra generar plantillas o crear plantillas para el evento, estas se enviaran en un link de acceso publico y se podra subir en la creacion den evento local, numeros, pais, nombres del invitado, cupos, para que al que se pueda tener un link unico y especial para cada invitado, de modo que al ingresar el ivitado ya esta identificado, y podra ver inforamcion del evento y confirmar desde allí su asistencia, es imporante que se añada el flujo de limite de asistentes, o nombdes de los invitado y cupos para esa invitacion
