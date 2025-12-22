@@ -18,6 +18,8 @@ const formRoutes = require('./routes/forms');
 const eventRoutes = require('./routes/events');
 const ticketRoutes = require('./routes/tickets');
 const uploadRoutes = require('./routes/upload');
+const shortlinkRoutes = require('./routes/shortlinks');
+const prisma = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -179,6 +181,54 @@ app.use('/api/forms', formRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/shortlinks', shortlinkRoutes);
+
+// Public redirect: /L<code>
+app.get('/L:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const s = await prisma.shortLink.findUnique({ where: { code } });
+    if (!s || !s.isActive) {
+      return res.status(404).send('Link no disponible');
+    }
+    const now = new Date();
+    if (s.activeFrom && now < s.activeFrom) {
+      return res.status(403).send('Link aún no activo');
+    }
+    if (s.expiresAt && now > s.expiresAt) {
+      return res.status(410).send('Link expirado');
+    }
+    try {
+      await prisma.shortLinkVisit.create({
+        data: {
+          shortLinkId: s.id,
+          ip: req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || null,
+          userAgent: req.headers['user-agent'] || null,
+          referer: req.headers['referer'] || null
+        }
+      });
+    } catch {}
+    if (s.redirectMode === 'IMMEDIATE') {
+      return res.redirect(302, s.targetUrl);
+    }
+    const title = s.interstitialTitle || 'Redirección';
+    const message =
+      s.interstitialMessage ||
+      'Serás redirigido al destino. Si no ocurre automáticamente, usa el botón.';
+    const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title></head>
+<body>
+  <h1>${title}</h1>
+  <p>${message}</p>
+  <a href="${s.targetUrl}">Ir ahora</a>
+  <script>setTimeout(function(){ window.location.href='${s.targetUrl}'; }, 2000);</script>
+</body></html>`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (e) {
+    return res.status(500).send('Error procesando redirección');
+  }
+});
 
 app.get('/api/streams/user-requests/:id/events/:eventId', (req, res) => {
   const { id, eventId } = req.params;
