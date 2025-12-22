@@ -106,11 +106,37 @@ router.post('/', async (req, res) => {
   }
 });
 
+const CACHE_TTL = 3600 * 1000; // 1 hour
+const metadataCache = new Map();
+
+// Periodic cleanup
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of metadataCache.entries()) {
+        if (now - val.timestamp > CACHE_TTL) metadataCache.delete(key);
+    }
+}, CACHE_TTL);
+
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
+];
+
 // Extract metadata from URL
 router.post('/extract-metadata', async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
+    
+    // Check Cache
+    if (metadataCache.has(url)) {
+        const cached = metadataCache.get(url);
+        if (Date.now() - cached.timestamp < CACHE_TTL) {
+            return res.json(cached.data);
+        }
+    }
     
     // Validate URL format
     try {
@@ -119,23 +145,70 @@ router.post('/extract-metadata', async (req, res) => {
       return res.status(400).json({ error: 'URL inválida' });
     }
 
-    const response = await fetch(url, { headers: { 'User-Agent': 'TifyBot/1.0' } });
+    let title = '', description = '', image = '';
+
+    // Special handling for YouTube via oEmbed (Fallback if client fails)
+    const isYouTube = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be)\/.+$/.test(url);
+    if (isYouTube) {
+        try {
+            const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+            const oembedRes = await fetch(oembedUrl);
+            if (oembedRes.ok) {
+                const data = await oembedRes.json();
+                title = data.title || '';
+                image = data.thumbnail_url || '';
+                description = data.author_name ? `Video by ${data.author_name}` : ''; 
+                
+                if (title && image) {
+                     const result = { title, description, image };
+                     metadataCache.set(url, { data: result, timestamp: Date.now() });
+                     return res.json(result);
+                }
+            }
+        } catch (e) {
+            console.log('YouTube oEmbed failed, falling back to scrape', e);
+        }
+    }
+
+    // Fallback / Default scraping with rotated User-Agent
+    const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+    const response = await fetch(url, { headers: { 'User-Agent': userAgent } });
     if (!response.ok) throw new Error('Failed to fetch URL');
     const html = await response.text();
     
-    // Simple regex extraction
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i) || 
-                       html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["'][^>]*>/i);
-    const title = titleMatch ? titleMatch[1] : '';
+    // Improved regex extraction
+    if (!title) {
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i) || 
+                           html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
+                           html.match(/<meta[^>]*name=["']twitter:title["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+        title = titleMatch ? titleMatch[1] : '';
+    }
     
-    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
-                      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["'][^>]*>/i);
-    const description = descMatch ? descMatch[1] : '';
+    if (!description) {
+        const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
+                          html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
+                          html.match(/<meta[^>]*name=["']twitter:description["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+        description = descMatch ? descMatch[1] : '';
+    }
     
-    const imgMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
-    const image = imgMatch ? imgMatch[1] : '';
+    if (!image) {
+        const imgMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
+                         html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["'][^>]*>/i) ||
+                         html.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*>/i);
+        image = imgMatch ? imgMatch[1] : '';
+    }
 
-    res.json({ title, description, image });
+    // Simple HTML entity decode
+    const decode = (str) => str ? str.replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec)).replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '';
+
+    const result = { 
+        title: decode(title), 
+        description: decode(description), 
+        image: decode(image) 
+    };
+    
+    metadataCache.set(url, { data: result, timestamp: Date.now() });
+    res.json(result);
   } catch (error) {
     console.error('Metadata extraction error:', error);
     // Return empty but success to avoid breaking UI
