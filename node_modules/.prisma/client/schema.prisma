@@ -55,6 +55,7 @@ model Channel {
   websiteUrl         String?            @map("website_url")
   socialLinks        Json?              @map("social_links")
   logoUrl            String?            @map("logo_url")
+  coverUrl           String?            @map("cover_url")
   icon               String             @default("bubble.left.and.bubble.right")
   parentId           String?            @map("parent_id")
   ownerId            String             @map("owner_id")

@@ -183,7 +183,10 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/shortlinks', shortlinkRoutes);
 
-// Public redirect: /L<code>
+// Servir archivos estáticos de uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Public redirect: /L:code/L<code>
 app.get('/L:code', async (req, res) => {
   try {
     const { code } = req.params;

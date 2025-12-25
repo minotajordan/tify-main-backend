@@ -387,7 +387,8 @@ router.post('/', async (req, res) => {
       approvalPolicy = 'OPTIONAL',
       websiteUrl,
       socialLinks,
-      logoUrl
+      logoUrl,
+      coverUrl
     } = req.body;
 
     const { organizationName, nit } = req.body || {};
@@ -425,6 +426,7 @@ router.post('/', async (req, res) => {
         websiteUrl: websiteUrl || null,
         socialLinks: socialLinks || null,
         logoUrl: logoUrl || null,
+        coverUrl: coverUrl || null,
         icon: icon || 'bubble.left.and.bubble.right',
         parentId: parentId || null,
         ownerId,
@@ -461,7 +463,8 @@ router.post('/:id/subchannels', async (req, res) => {
       approvalPolicy = 'OPTIONAL',
       websiteUrl,
       socialLinks,
-      logoUrl
+      logoUrl,
+      coverUrl
     } = req.body;
 
     const { organizationName, nit } = req.body || {};
@@ -501,6 +504,7 @@ router.post('/:id/subchannels', async (req, res) => {
         websiteUrl: websiteUrl || null,
         socialLinks: socialLinks || null,
         logoUrl: logoUrl || null,
+        coverUrl: coverUrl || null,
         icon: icon || 'bubble.left.and.bubble.right',
         parentId: id,
         ownerId,

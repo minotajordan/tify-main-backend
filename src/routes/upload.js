@@ -1,38 +1,65 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const path = require('path');
+const fs = require('fs');
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Check if Cloudinary is configured
+const useCloudinary = process.env.CLOUDINARY_CLOUD_NAME && 
+                      process.env.CLOUDINARY_API_KEY && 
+                      process.env.CLOUDINARY_API_SECRET;
 
-// Configure Storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    // Determine resource type based on mimetype
-    let resource_type = 'auto';
-    if (file.mimetype.startsWith('image/')) {
-        resource_type = 'image';
-    } else if (file.mimetype.startsWith('video/')) {
-        resource_type = 'video';
-    } else {
-        resource_type = 'raw';
+let storage;
+
+if (useCloudinary) {
+  const cloudinary = require('cloudinary').v2;
+  const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+  // Configure Cloudinary
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+
+  // Configure Cloudinary Storage
+  storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: async (req, file) => {
+      let resource_type = 'auto';
+      if (file.mimetype.startsWith('image/')) {
+          resource_type = 'image';
+      } else if (file.mimetype.startsWith('video/')) {
+          resource_type = 'video';
+      } else {
+          resource_type = 'raw';
+      }
+
+      return {
+        folder: 'tify_uploads',
+        resource_type: resource_type,
+        use_filename: true,
+        unique_filename: true,
+      };
+    },
+  });
+} else {
+  // Local Disk Storage
+  const uploadDir = path.join(__dirname, '../../uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
     }
-
-    return {
-      folder: 'tify_uploads',
-      resource_type: resource_type,
-      use_filename: true,
-      unique_filename: true,
-    };
-  },
-});
+  });
+}
 
 // File filter
 const fileFilter = (req, file, cb) => {
@@ -77,12 +104,22 @@ router.post('/', upload.single('file'), (req, res) => {
       });
     }
 
-    console.log(`✅ File uploaded to Cloudinary: ${req.file.originalname} (${req.file.size} bytes)`);
+    let fileUrl;
+    if (useCloudinary) {
+      fileUrl = req.file.path;
+      console.log(`✅ File uploaded to Cloudinary: ${req.file.originalname}`);
+    } else {
+      // Construct local URL
+      const protocol = req.protocol;
+      const host = req.get('host');
+      fileUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+      console.log(`✅ File uploaded locally: ${req.file.filename}`);
+    }
     
     // Construct response
     res.json({
       success: true,
-      url: req.file.path, // Cloudinary URL
+      url: fileUrl,
       filename: req.file.filename,
       originalName: req.file.originalname,
       mimetype: req.file.mimetype,
