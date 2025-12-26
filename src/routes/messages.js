@@ -99,6 +99,33 @@ router.get('/channel/:channelId', async (req, res) => {
   }
 });
 
+// GET /api/messages/:id/public - Obtener mensaje público sin autenticación
+router.get('/:id/public', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const msg = await prisma.message.findUnique({
+      where: { id },
+      include: {
+        sender: { select: { id: true, username: true, fullName: true } },
+        channel: { select: { title: true, icon: true, isPublic: true } }
+      }
+    });
+
+    if (!msg) {
+      return res.status(404).json({ error: 'Mensaje no encontrado' });
+    }
+
+    if (!msg.channel.isPublic) {
+      return res.status(403).json({ error: 'El mensaje pertenece a un canal privado' });
+    }
+
+    res.json(msg);
+  } catch (error) {
+    console.error('Error obteniendo mensaje público:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // GET /api/messages/:id - Obtener mensaje por id
 router.get('/:id', async (req, res) => {
   try {
