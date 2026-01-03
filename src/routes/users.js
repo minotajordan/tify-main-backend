@@ -131,6 +131,7 @@ router.get('/:id', async (req, res) => {
         isDisabled: true,
         createdAt: true,
         verificationCode: true,
+        profile: { select: { extra: true } },
         _count: {
           select: {
             subscriptions: true,
@@ -155,8 +156,10 @@ router.get('/:id', async (req, res) => {
 
     const userProfile = {
       ...user,
+      bio: user.profile?.extra?.bio || null,
       ...stats,
-      _count: undefined
+      _count: undefined,
+      profile: undefined
     };
 
     res.json(userProfile);
@@ -166,35 +169,54 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/users/:id - Actualizar perfil de usuario
-router.put('/:id', async (req, res) => {
+// PATCH /api/users/:id - Actualizar perfil de usuario
+router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullName, phoneNumber } = req.body;
+    const { fullName, phoneNumber, username, email, avatarUrl, bio } = req.body;
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: {
-        fullName,
-        phoneNumber
-      },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        fullName: true,
-        phoneNumber: true,
-        isAdmin: true
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
+    if (username !== undefined) updateData.username = username;
+    if (email !== undefined) updateData.email = email;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+
+    try {
+      const user = await prisma.user.update({
+        where: { id },
+        data: updateData,
+        include: { profile: true }
+      });
+
+      if (bio !== undefined) {
+        const extra = user.profile?.extra ? JSON.parse(JSON.stringify(user.profile.extra)) : {};
+        extra.bio = bio;
+
+        if (user.profile) {
+          await prisma.userProfile.update({
+            where: { userId: id },
+            data: { extra }
+          });
+        } else {
+          await prisma.userProfile.create({
+            data: { userId: id, extra }
+          });
+        }
       }
-    });
 
-    res.json({
-      message: 'Perfil actualizado exitosamente',
-      user
-    });
+      // Return updated user without sensitive fields
+      const { passwordHash, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (e) {
+      if (e.code === 'P2002') {
+        return res.status(400).json({ error: 'El nombre de usuario o correo ya está en uso', code: 'DUPLICATE_ENTRY' });
+      }
+      throw e;
+    }
   } catch (error) {
     console.error('Error actualizando usuario:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ error: 'Error interno del servidor', details: error.message });
   }
 });
 

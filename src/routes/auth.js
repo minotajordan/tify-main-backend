@@ -58,7 +58,18 @@ router.post('/login', async (req, res) => {
     if (!identifier || !password) return res.status(400).json({ error: 'identifier y password son requeridos', code: 'VALIDATION_ERROR' });
     const user = await prisma.user.findFirst({
       where: { OR: [{ email: identifier }, { username: identifier }] },
-      select: { id: true, email: true, username: true, fullName: true, isAdmin: true, passwordHash: true, isDisabled: true }
+      select: { 
+        id: true, 
+        email: true, 
+        username: true, 
+        fullName: true, 
+        isAdmin: true, 
+        passwordHash: true, 
+        isDisabled: true,
+        avatarUrl: true,
+        phoneNumber: true,
+        profile: { select: { extra: true } }
+      }
     });
     if (!user?.passwordHash) return res.status(401).json({ error: 'Credenciales inválidas', code: 'INVALID_CREDENTIALS' });
     if (user.isDisabled) return res.status(403).json({ error: 'Usuario deshabilitado', code: 'USER_DISABLED' });
@@ -66,7 +77,19 @@ router.post('/login', async (req, res) => {
     if (!ok) return res.status(401).json({ error: 'Credenciales inválidas', code: 'INVALID_CREDENTIALS' });
     const token = signToken({ id: user.id, isAdmin: user.isAdmin });
     try { await prisma.auditLog.create({ data: { actorId: user.id, action: 'USER_LOGIN', targetUserId: user.id, details: {} } }); } catch {}
-    res.json({ token, user: { id: user.id, email: user.email, username: user.username, fullName: user.fullName, isAdmin: user.isAdmin } });
+    
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      fullName: user.fullName,
+      isAdmin: user.isAdmin,
+      avatarUrl: user.avatarUrl,
+      phoneNumber: user.phoneNumber,
+      bio: user.profile?.extra?.bio || null
+    };
+    
+    res.json({ token, user: userResponse });
   } catch (error) {
     res.status(500).json({ error: 'Error en inicio de sesión', code: 'LOGIN_FAILED', details: error.message });
   }
@@ -118,10 +141,26 @@ router.get('/me', async (req, res) => {
     const payload = jwt.verify(raw, process.env.JWT_SECRET || 'dev_secret');
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, username: true, fullName: true, isAdmin: true }
+      select: { 
+        id: true, 
+        email: true, 
+        username: true, 
+        fullName: true, 
+        isAdmin: true,
+        avatarUrl: true,
+        phoneNumber: true,
+        profile: { select: { extra: true } }
+      }
     });
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado', code: 'USER_NOT_FOUND' });
-    res.json(user);
+    
+    const userResponse = {
+      ...user,
+      bio: user.profile?.extra?.bio || null,
+      profile: undefined
+    };
+
+    res.json(userResponse);
   } catch (error) {
     res.status(401).json({ error: 'Token inválido', code: 'TOKEN_INVALID', details: error.message });
   }

@@ -174,6 +174,48 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/channels/:id - Actualizar detalles del canal
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      title, 
+      description, 
+      icon, 
+      logoUrl, 
+      coverUrl, 
+      websiteUrl, 
+      socialLinks, 
+      approvalPolicy, 
+      isPublic, 
+      isHidden,
+      searchExactOnly
+    } = req.body;
+
+    const updatedChannel = await prisma.channel.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        icon,
+        logoUrl,
+        coverUrl,
+        websiteUrl,
+        socialLinks,
+        approvalPolicy,
+        isPublic,
+        isHidden,
+        searchExactOnly
+      }
+    });
+
+    res.json(updatedChannel);
+  } catch (error) {
+    console.error('Error actualizando canal:', error);
+    res.status(500).json({ error: 'Error interno del servidor', details: error.message });
+  }
+});
+
 // GET /api/channels/:id/subchannels - Subcanales paginados con conteos
 router.get('/:id/stats', async (req, res) => {
   try {
