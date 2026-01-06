@@ -5,6 +5,12 @@ const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
 
+// Helper to strip HTML tags
+const stripHtml = (str) => {
+  if (!str) return '';
+  return str.replace(/<[^>]*>?/gm, '');
+};
+
 // Middleware de autenticación
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -62,7 +68,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Crear un nuevo formulario
 router.post('/', authenticate, async (req, res) => {
-  const { title, description, headerContent, footerContent, successMessage, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, startDate, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
   const slug = Math.random().toString(36).substring(2, 10); // Simple slug generation
 
   try {
@@ -72,7 +78,8 @@ router.post('/', authenticate, async (req, res) => {
         description,
         headerContent,
         footerContent,
-        successMessage,
+        successMessage: stripHtml(successMessage),
+        startDate: startDate ? new Date(startDate) : null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         isPublished: isPublished || false,
         wasPublished: wasPublished || isPublished || false,
@@ -103,7 +110,7 @@ router.post('/', authenticate, async (req, res) => {
 // Actualizar un formulario
 router.put('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
-  const { title, description, headerContent, footerContent, successMessage, isActive, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, isActive, startDate, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
 
   try {
     const existingForm = await prisma.form.findUnique({ where: { id } });
@@ -120,7 +127,7 @@ router.put('/:id', authenticate, async (req, res) => {
           description,
           headerContent,
           footerContent,
-          successMessage,
+          successMessage: stripHtml(successMessage),
           isActive,
           isPublished,
           wasPublished,
@@ -230,6 +237,14 @@ router.post('/public/:slug/submit', async (req, res) => {
   try {
     const form = await prisma.form.findUnique({ where: { slug } });
     if (!form || !form.isActive) return res.status(404).json({ error: 'Form not available' });
+
+    const now = new Date();
+    if (form.startDate && now < new Date(form.startDate)) {
+       return res.status(403).json({ error: 'Form not yet available' });
+    }
+    if (form.expiresAt && now > new Date(form.expiresAt)) {
+       return res.status(403).json({ error: 'Form expired' });
+    }
 
     const submission = await prisma.formSubmission.create({
       data: {
