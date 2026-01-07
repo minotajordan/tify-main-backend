@@ -189,8 +189,20 @@ router.patch('/:id', async (req, res) => {
       approvalPolicy, 
       isPublic, 
       isHidden,
-      searchExactOnly
+      searchExactOnly,
+      ownerId
     } = req.body;
+
+    let ownerUpdate = {};
+    if (ownerId !== undefined) {
+      if (ownerId === null) {
+        ownerUpdate = { ownerId: null };
+      } else {
+        const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true } });
+        if (!owner) return res.status(404).json({ error: 'Propietario no encontrado' });
+        ownerUpdate = { ownerId };
+      }
+    }
 
     const updatedChannel = await prisma.channel.update({
       where: { id },
@@ -205,7 +217,8 @@ router.patch('/:id', async (req, res) => {
         approvalPolicy,
         isPublic,
         isHidden,
-        searchExactOnly
+        searchExactOnly,
+        ...ownerUpdate
       }
     });
 

@@ -173,7 +173,7 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullName, phoneNumber, username, email, avatarUrl, bio } = req.body;
+    const { fullName, phoneNumber, username, email, avatarUrl, bio, password, isAdmin } = req.body;
 
     const updateData = {};
     if (fullName !== undefined) updateData.fullName = fullName;
@@ -181,6 +181,11 @@ router.patch('/:id', async (req, res) => {
     if (username !== undefined) updateData.username = username;
     if (email !== undefined) updateData.email = email;
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+    if (isAdmin !== undefined) updateData.isAdmin = isAdmin;
+    
+    if (password) {
+      updateData.passwordHash = await bcrypt.hash(password, 10);
+    }
 
     try {
       const user = await prisma.user.update({

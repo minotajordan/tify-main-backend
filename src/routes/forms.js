@@ -304,4 +304,77 @@ router.get('/:id/submissions', authenticate, async (req, res) => {
   }
 });
 
+// Obtener estadísticas públicas del formulario (para votaciones/encuestas)
+router.get('/public/:slug/stats', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const form = await prisma.form.findUnique({
+      where: { slug },
+      include: { fields: true }
+    });
+
+    if (!form || !form.isActive) return res.status(404).json({ error: 'Form not found' });
+
+    // Fetch all submissions data
+    const submissions = await prisma.formSubmission.findMany({
+      where: { formId: form.id },
+      select: { data: true }
+    });
+
+    // Aggregation Logic
+    const stats = {};
+    
+    // Iterate over fields to find votable fields (select, radio, voting options)
+    // We mainly care about the first field for simple voting, or all select/radio fields
+    const votingFields = form.fields.filter(f => 
+      f.type === 'select' || f.type === 'radio' || f.type === 'checkbox'
+    );
+
+    votingFields.forEach(field => {
+      const fieldStats = {};
+      
+      // Initialize options with 0 if possible
+      if (field.options && Array.isArray(field.options)) {
+        field.options.forEach(opt => {
+           // Handle object options or string options
+           const label = typeof opt === 'string' ? opt : opt.label;
+           if (label) fieldStats[label] = 0;
+        });
+      }
+
+      // Count votes
+      submissions.forEach(sub => {
+        const val = sub.data[field.label];
+        if (val) {
+          if (Array.isArray(val)) {
+            val.forEach(v => {
+               fieldStats[v] = (fieldStats[v] || 0) + 1;
+            });
+          } else {
+             fieldStats[val] = (fieldStats[val] || 0) + 1;
+          }
+        }
+      });
+
+      // Calculate totals and percentages
+      const total = Object.values(fieldStats).reduce((a, b) => a + b, 0);
+      const results = Object.keys(fieldStats).map(key => ({
+        label: key,
+        count: fieldStats[key],
+        percent: total > 0 ? Math.round((fieldStats[key] / total) * 100) : 0
+      }));
+      
+      // Sort by count desc
+      results.sort((a, b) => b.count - a.count);
+
+      stats[field.label] = results;
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error fetching stats' });
+  }
+});
+
 module.exports = router;

@@ -20,6 +20,7 @@ const eventRoutes = require('./routes/events');
 const ticketRoutes = require('./routes/tickets');
 const uploadRoutes = require('./routes/upload');
 const shortlinkRoutes = require('./routes/shortlinks');
+const locationRoutes = require('./routes/locations');
 const prisma = require('./config/database');
 
 const app = express();
@@ -183,6 +184,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/shortlinks', shortlinkRoutes);
+app.use('/api/locations', locationRoutes);
 
 // Servir archivos estáticos de uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -329,6 +331,7 @@ module.exports = app;
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
+    console.log('🔄 Server restarted at ' + new Date().toISOString());
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
     try {
       startMonitoringServer({ getSnapshot, resetMetrics, port: MONITORING_PORT });

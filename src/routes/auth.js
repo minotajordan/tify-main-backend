@@ -1,9 +1,21 @@
 // /Users/minotajordan/WebstormProjects/tify/backend/src/routes/auth.js
 const express = require('express');
 const router = express.Router();
+// Auth routes with thumbnail support
 const prisma = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
+function getAvatarThumbnail(url) {
+  if (!url) return null;
+  if (url.includes('cloudinary.com')) {
+    const parts = url.split('/upload/');
+    if (parts.length === 2) {
+      return `${parts[0]}/upload/w_90,h_90,c_fill,r_max,f_auto,q_auto/${parts[1]}`;
+    }
+  }
+  return url;
+}
 
 function signToken(user) {
   return jwt.sign({ sub: user.id, isAdmin: user.isAdmin }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '7d' });
@@ -85,6 +97,7 @@ router.post('/login', async (req, res) => {
       fullName: user.fullName,
       isAdmin: user.isAdmin,
       avatarUrl: user.avatarUrl,
+      avatarThumbnailUrl: getAvatarThumbnail(user.avatarUrl),
       phoneNumber: user.phoneNumber,
       bio: user.profile?.extra?.bio || null
     };
@@ -156,6 +169,7 @@ router.get('/me', async (req, res) => {
     
     const userResponse = {
       ...user,
+      avatarThumbnailUrl: getAvatarThumbnail(user.avatarUrl),
       bio: user.profile?.extra?.bio || null,
       profile: undefined
     };
