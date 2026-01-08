@@ -19,6 +19,12 @@ router.get('/', async (req, res) => {
     if (isPublic !== undefined) {
       where.isPublic = isPublic === 'true';
     }
+    
+    // Si no hay búsqueda específica, solo retornar canales raíz (sin padre)
+    // para evitar duplicidad y reducir carga.
+    if (!search) {
+        where.parentId = null;
+    }
 
     const channels = await prisma.channel.findMany({
       where,
@@ -26,25 +32,54 @@ router.get('/', async (req, res) => {
         owner: {
           select: { id: true, username: true, fullName: true }
         },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, content: true, createdAt: true, priority: true }
+        },
         subchannels: {
-          select: { id: true, title: true, icon: true, logoUrl: true, memberCount: true, description: true, websiteUrl: true, socialLinks: true }
+          select: {
+            messages: {
+              take: 1,
+              orderBy: { createdAt: 'desc' },
+              select: { id: true, content: true, createdAt: true, priority: true }
+            }
+          }
         },
         subscriptions: userId ? {
           where: { userId },
           select: { isActive: true }
         } : false,
         _count: {
-          select: { subscriptions: true }
+          select: { subscriptions: true, messages: true, subchannels: true }
         }
       },
       orderBy: { memberCount: 'desc' }
     });
 
-    const channelsWithSubscription = channels.map(channel => ({
-      ...channel,
-      isSubscribed: userId ? channel.subscriptions?.length > 0 : false,
-      subscriptions: undefined // Remover del response
-    }));
+    const channelsWithSubscription = channels.map(channel => {
+      // Find the absolute latest message among the channel and its subchannels
+      const directMsg = channel.messages?.[0];
+      const subMsgCandidates = channel.subchannels?.flatMap(s => s.messages) || [];
+      const allMessages = [directMsg, ...subMsgCandidates].filter(Boolean);
+      
+      // Sort desc by createdAt
+      allMessages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const lastMsg = allMessages[0];
+
+      return {
+        ...channel,
+        lastMessageId: lastMsg ? lastMsg.id : null,
+        lastMessagePreview: lastMsg ? String(lastMsg.content).slice(0, 140) : null,
+        lastMessageAt: lastMsg ? lastMsg.createdAt : null,
+        lastMessagePriority: lastMsg ? lastMsg.priority : null,
+        subchannelsCount: channel._count?.subchannels || 0,
+        isSubscribed: userId ? channel.subscriptions?.length > 0 : false,
+        subscriptions: undefined,
+        messages: undefined,
+        subchannels: undefined // Ensure subchannels list is not returned
+      };
+    });
 
     res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
     res.json(channelsWithSubscription);

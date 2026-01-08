@@ -92,15 +92,22 @@ router.delete('/', async (req, res) => {
       data: { isActive: false }
     });
 
-    // Decrementar contador de miembros
-    await prisma.channel.update({
+    // Decrementar contador de miembros solo si es mayor a 0
+    const channel = await prisma.channel.findUnique({
       where: { id: channelId },
-      data: {
-        memberCount: {
-          decrement: 1
-        }
-      }
+      select: { memberCount: true }
     });
+
+    if (channel && (channel.memberCount || 0) > 0) {
+      await prisma.channel.update({
+        where: { id: channelId },
+        data: {
+          memberCount: {
+            decrement: 1
+          }
+        }
+      });
+    }
 
     await prisma.auditLog.create({ data: { actorId: req.body.userId, action: 'USER_UNSUBSCRIBE', targetUserId: req.body.userId, targetChannelId: channelId, details: {} } });
             res.json({ message: 'Desuscripción exitosa' });

@@ -71,8 +71,8 @@ router.get('/bootstrap', async (req, res) => {
         const ch = sub.channel;
         const lastMsg = await prisma.message.findFirst({
           where: { channelId: ch.id },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, content: true, createdAt: true }
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, content: true, createdAt: true, priority: true }
         });
         const unreadCount = await prisma.messageDelivery.count({
           where: { message: { channelId: ch.id }, userId, deliveryStatus: 'DELIVERED', readAt: null }
@@ -90,8 +90,10 @@ router.get('/bootstrap', async (req, res) => {
           ...ch,
           isSubscribed: true,
           isFavorite: !!sub.isFavorite,
+          lastMessageId: lastMsg ? lastMsg.id : null,
           lastMessagePreview: lastMsg ? String(lastMsg.content).slice(0, 140) : null,
           lastMessageAt: lastMsg ? lastMsg.createdAt : null,
+          lastMessagePriority: lastMsg ? lastMsg.priority : null,
           unreadCount,
           subchannels: subchannelsWithFlags
         };
