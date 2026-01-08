@@ -73,6 +73,11 @@ router.delete('/', async (req, res) => {
   try {
     const { userId, channelId } = req.body;
 
+    if (!userId || !channelId) {
+      console.error('Intento de desuscripción con datos faltantes:', req.body);
+      return res.status(400).json({ error: 'Faltan datos requeridos (userId, channelId)' });
+    }
+
     const subscription = await prisma.channelSubscription.findUnique({
       where: {
         userId_channelId: {
@@ -109,11 +114,20 @@ router.delete('/', async (req, res) => {
       });
     }
 
-    await prisma.auditLog.create({ data: { actorId: req.body.userId, action: 'USER_UNSUBSCRIBE', targetUserId: req.body.userId, targetChannelId: channelId, details: {} } });
-            res.json({ message: 'Desuscripción exitosa' });
+    await prisma.auditLog.create({ 
+      data: { 
+        actorId: userId, 
+        action: 'USER_UNSUBSCRIBE', 
+        targetUserId: userId, 
+        targetChannelId: channelId, 
+        details: {} 
+      } 
+    });
+    
+    res.json({ message: 'Desuscripción exitosa' });
   } catch (error) {
     console.error('Error eliminando suscripción:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ error: 'Error interno del servidor', details: error.message });
   }
 });
 

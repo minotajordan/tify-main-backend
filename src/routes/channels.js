@@ -328,15 +328,60 @@ router.get('/:id/subchannels', async (req, res) => {
       prisma.channel.count({ where: { parentId: id } })
     ]);
 
-    const augmented = await Promise.all(items.map(async (sc) => {
-      const [approversCount, pendingCount, sentCount, subsCount] = await Promise.all([
-        prisma.channelApprover.count({ where: { channelId: sc.id } }),
-        prisma.message.count({ where: { channelId: sc.id, publishedAt: null } }),
-        prisma.message.count({ where: { channelId: sc.id, NOT: { publishedAt: null } } }),
-        prisma.channelSubscription.count({ where: { channelId: sc.id, isActive: true } })
-      ]);
-      return { ...sc, memberCount: subsCount, counts: { approvers: approversCount, pending: pendingCount, sent: sentCount } };
-    }));
+    if (items.length === 0) {
+      return res.json({
+        items: [],
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      });
+    }
+
+    const channelIds = items.map(c => c.id);
+
+    // Optimized aggregation queries to avoid N+1 problem and connection pool exhaustion
+    const [approversCounts, pendingCounts, sentCounts, subsCounts] = await Promise.all([
+      prisma.channelApprover.groupBy({
+        by: ['channelId'],
+        where: { channelId: { in: channelIds } },
+        _count: { id: true }
+      }),
+      prisma.message.groupBy({
+        by: ['channelId'],
+        where: { channelId: { in: channelIds }, publishedAt: null },
+        _count: { id: true }
+      }),
+      prisma.message.groupBy({
+        by: ['channelId'],
+        where: { channelId: { in: channelIds }, NOT: { publishedAt: null } },
+        _count: { id: true }
+      }),
+      prisma.channelSubscription.groupBy({
+        by: ['channelId'],
+        where: { channelId: { in: channelIds }, isActive: true },
+        _count: { id: true }
+      })
+    ]);
+
+    const getCount = (arr, channelId) => {
+      const found = arr.find(x => x.channelId === channelId);
+      return found ? found._count.id : 0;
+    };
+
+    const augmented = items.map(sc => {
+      const approversCount = getCount(approversCounts, sc.id);
+      const pendingCount = getCount(pendingCounts, sc.id);
+      const sentCount = getCount(sentCounts, sc.id);
+      const subsCount = getCount(subsCounts, sc.id);
+
+      return { 
+        ...sc, 
+        memberCount: subsCount, 
+        counts: { 
+          approvers: approversCount, 
+          pending: pendingCount, 
+          sent: sentCount 
+        } 
+      };
+    });
 
     res.set('Cache-Control', 'public, max-age=20, stale-while-revalidate=120');
     res.json({
@@ -345,7 +390,7 @@ router.get('/:id/subchannels', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo subcanales:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ error: 'Error interno del servidor', details: error.message });
   }
 });
 
