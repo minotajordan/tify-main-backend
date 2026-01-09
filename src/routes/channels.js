@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 // GET /api/channels - Obtener todos los canales
 router.get('/', async (req, res) => {
   try {
-    const { userId, search, isPublic } = req.query;
+    const { userId, search, isPublic, sort, hasImage } = req.query;
     
     const where = {};
     if (search) {
@@ -19,11 +19,50 @@ router.get('/', async (req, res) => {
     if (isPublic !== undefined) {
       where.isPublic = isPublic === 'true';
     }
+
+    if (hasImage === 'true') {
+      where.OR = [
+        ...(where.OR || []),
+        { coverUrl: { not: null } },
+        { logoUrl: { not: null } }
+      ];
+      // Note: If search exists, we need to be careful with OR. 
+      // Prisma OR is top level. If we want AND (search OR search) AND (hasImage OR hasImage), we need AND.
+      // Let's refine this logic below.
+    }
     
-    // Si no hay búsqueda específica, solo retornar canales raíz (sin padre)
-    // para evitar duplicidad y reducir carga.
-    if (!search) {
+    // Si no hay búsqueda específica y no se pide filtrar por imagen, solo retornar canales raíz
+    if (!search && !hasImage && !sort) {
         where.parentId = null;
+    }
+
+    // Refined Where Logic for hasImage
+    if (hasImage === 'true') {
+        const imageCondition = {
+            OR: [
+                { AND: [{ coverUrl: { not: null } }, { coverUrl: { not: '' } }] },
+                { AND: [{ logoUrl: { not: null } }, { logoUrl: { not: '' } }] }
+            ]
+        };
+        
+        if (where.OR && search) {
+            // Combine existing search OR with image OR using AND
+            where.AND = [
+                { OR: where.OR },
+                imageCondition
+            ];
+            delete where.OR; // Remove the top-level OR as it's now inside AND
+        } else {
+            // Just apply image condition
+            // If where.OR existed but no search (unlikely given logic above), it would be overwritten, which is fine if we handle it correctly.
+            // But actually where.OR only set if search is present.
+            where.OR = imageCondition.OR;
+        }
+    }
+
+    let orderBy = { memberCount: 'desc' };
+    if (sort === 'createdAt') {
+        orderBy = { createdAt: 'desc' };
     }
 
     const channels = await prisma.channel.findMany({
@@ -54,7 +93,7 @@ router.get('/', async (req, res) => {
           select: { subscriptions: true, messages: true, subchannels: true }
         }
       },
-      orderBy: { memberCount: 'desc' }
+      orderBy
     });
 
     const channelsWithSubscription = channels.map(channel => {
