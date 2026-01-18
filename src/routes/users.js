@@ -173,7 +173,7 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullName, phoneNumber, username, email, avatarUrl, bio, password, isAdmin } = req.body;
+    const { fullName, phoneNumber, username, email, avatarUrl, bio, password, isAdmin, uiTheme } = req.body;
 
     const updateData = {};
     if (fullName !== undefined) updateData.fullName = fullName;
@@ -182,6 +182,7 @@ router.patch('/:id', async (req, res) => {
     if (email !== undefined) updateData.email = email;
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
     if (isAdmin !== undefined) updateData.isAdmin = isAdmin;
+    if (uiTheme !== undefined) updateData.uiTheme = uiTheme;
     
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, 10);

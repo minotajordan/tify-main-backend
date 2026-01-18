@@ -24,6 +24,7 @@ model User {
   isAdmin                   Boolean   @default(false) @map("is_admin")
   isCoordinator             Boolean   @default(false) @map("is_coordinator")
   isDisabled                Boolean   @default(false) @map("is_disabled")
+  uiTheme                   String    @default("2") @map("ui_theme")
   createdAt                 DateTime  @default(now()) @map("created_at")
   updatedAt                 DateTime  @updatedAt @map("updated_at")
 

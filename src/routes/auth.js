@@ -80,6 +80,7 @@ router.post('/login', async (req, res) => {
         isDisabled: true,
         avatarUrl: true,
         phoneNumber: true,
+        uiTheme: true,
         profile: { select: { extra: true } }
       }
     });

@@ -546,6 +546,20 @@ router.post('/:id/validate-password', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'No autorizado', code: 'UNAUTHORIZED' });
+    }
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Token inválido', code: 'INVALID_TOKEN' });
+    }
+    try {
+      jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
+    } catch (e) {
+      return res.status(401).json({ error: 'Sesión expirada', code: 'SESSION_EXPIRED' });
+    }
+
     const {
       title,
       description,
@@ -620,8 +634,21 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Crear un subcanal
 router.post('/:id/subchannels', async (req, res) => {
   try {
+    // Verificar token para creación de subcanales
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'No autorizado', code: 'AUTH_REQUIRED' });
+    }
+    const token = authHeader.split(' ')[1];
+    try {
+      jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
+    } catch (err) {
+      return res.status(401).json({ error: 'Token inválido', code: 'INVALID_TOKEN' });
+    }
+
     const { id } = req.params;
     const {
       title,
