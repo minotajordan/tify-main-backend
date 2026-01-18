@@ -460,6 +460,7 @@ model Form {
   isPublished    Boolean  @default(false) @map("is_published")
   wasPublished   Boolean  @default(false) @map("was_published")
   isDeleted      Boolean  @default(false) @map("is_deleted")
+  isWizard       Boolean  @default(false) @map("is_wizard")
   collectUserInfo Boolean @default(false) @map("collect_user_info")
   startDate      DateTime? @map("start_date")
   expiresAt      DateTime? @map("expires_at")

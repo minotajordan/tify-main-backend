@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/database');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 // GET /api/users - Listar usuarios con métricas
 router.get('/', async (req, res) => {
   try {

@@ -68,7 +68,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Crear un nuevo formulario
 router.post('/', authenticate, async (req, res) => {
-  const { title, description, headerContent, footerContent, successMessage, startDate, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, startDate, expiresAt, isPublished, wasPublished, fields, collectUserInfo, isWizard } = req.body;
   const slug = Math.random().toString(36).substring(2, 10); // Simple slug generation
 
   try {
@@ -84,6 +84,7 @@ router.post('/', authenticate, async (req, res) => {
         isPublished: isPublished || false,
         wasPublished: wasPublished || isPublished || false,
         collectUserInfo: collectUserInfo || false,
+        isWizard: isWizard || false,
         slug,
         userId: req.user.id,
         fields: {
@@ -110,7 +111,7 @@ router.post('/', authenticate, async (req, res) => {
 // Actualizar un formulario
 router.put('/:id', authenticate, async (req, res) => {
   const { id } = req.params;
-  const { title, description, headerContent, footerContent, successMessage, isActive, startDate, expiresAt, isPublished, wasPublished, fields, collectUserInfo } = req.body;
+  const { title, description, headerContent, footerContent, successMessage, isActive, startDate, expiresAt, isPublished, wasPublished, fields, collectUserInfo, isWizard } = req.body;
 
   try {
     const existingForm = await prisma.form.findUnique({ where: { id } });
@@ -132,6 +133,7 @@ router.put('/:id', authenticate, async (req, res) => {
           isPublished,
           wasPublished,
           collectUserInfo,
+          isWizard,
           expiresAt: expiresAt ? new Date(expiresAt) : null
         }
       });
