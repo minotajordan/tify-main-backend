@@ -59,8 +59,8 @@ app.use(cors({
 }));
 
 // Body parsing
-app.use(express.json({ limit: '60mb' }));
-app.use(express.urlencoded({ extended: true, limit: '60mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Metrics monitoring
 const { metricsMiddleware, getSnapshot, resetMetrics } = require('../monitoring/metricsMiddleware');
