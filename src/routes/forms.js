@@ -237,8 +237,34 @@ router.post('/public/:slug/submit', async (req, res) => {
   const userAgent = req.headers['user-agent'];
 
   try {
-    const form = await prisma.form.findUnique({ where: { slug } });
+    const form = await prisma.form.findUnique({ 
+      where: { slug },
+      include: { fields: true }
+    });
     if (!form || !form.isActive) return res.status(404).json({ error: 'Form not available' });
+
+    // Validation: Check file sizes
+    if (form.fields) {
+      for (const field of form.fields) {
+        if (field.type === 'file' && field.options && field.options.maxSize) {
+          const fileData = data[field.label];
+          if (fileData && fileData.data && typeof fileData.data === 'string') {
+            // Calculate approximate size from base64 (3/4 of length)
+            // field.options.maxSize is in MB
+            const maxSizeBytes = field.options.maxSize * 1024 * 1024;
+            const base64Length = fileData.data.length - (fileData.data.indexOf(',') + 1);
+            const approxSize = (base64Length * 3) / 4;
+            
+            if (approxSize > maxSizeBytes) {
+               return res.status(400).json({ 
+                 error: `File too large for field ${field.label}`,
+                 message: `El archivo para ${field.label} excede el límite de ${field.options.maxSize}MB.`
+               });
+            }
+          }
+        }
+      }
+    }
 
     const now = new Date();
     if (form.startDate && now < new Date(form.startDate)) {
