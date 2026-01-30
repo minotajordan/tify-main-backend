@@ -4,9 +4,9 @@
   "description": "Backend API para App de Mensajería Emergente",
   "main": "src/server.js",
   "scripts": {
-    "start": "(lsof -ti:3333 | xargs kill -9 2>/dev/null || true) && node src/server.js",
-    "dev": "(lsof -ti:3333 | xargs kill -9 2>/dev/null || true) && nodemon src/server.js",
-    "emitter": "(lsof -ti:8766 | xargs kill -9 2>/dev/null || true) && python3 scripts/event_emitter.py",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "emitter": "python3 scripts/event_emitter.py",
     "test": "jest",
     "postinstall": "prisma generate"
   },
