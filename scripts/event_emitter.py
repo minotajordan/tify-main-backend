@@ -8,6 +8,12 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 try:
+    import psycopg2
+    from psycopg2 import extras
+except Exception:
+    psycopg2 = None
+
+try:
     import pymysql
 except Exception:
     pymysql = None
@@ -156,9 +162,13 @@ def _load_backend_env():
             pass
 
 def connect_db():
-    if pymysql is None:
-        raise RuntimeError('PyMySQL no instalado')
-    return pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, port=DB_PORT, autocommit=True, cursorclass=pymysql.cursors.DictCursor)
+    if psycopg2:
+        conn = psycopg2.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, dbname=DB_NAME, port=DB_PORT, cursor_factory=psycopg2.extras.RealDictCursor)
+        conn.autocommit = True
+        return conn
+    if pymysql:
+        return pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, port=DB_PORT, autocommit=True, cursorclass=pymysql.cursors.DictCursor)
+    raise RuntimeError('Ni psycopg2 ni PyMySQL instalados')
 
 def fetch_messages_since(conn, since_dt):
     q = "SELECT id, channel_id, content, created_at, event_at FROM tify_messages WHERE created_at > %s ORDER BY created_at ASC"
@@ -231,10 +241,10 @@ def get_recipient_tokens(conn, channel_id, created_at_iso):
                 FROM tify_channel_subscriptions cs
                 JOIN tify_user_messaging_settings ums ON ums.user_id = cs.user_id
                 WHERE cs.channel_id = %s
-                  AND cs.is_active = 1
-                  AND cs.receive_messages = 1
+                  AND cs.is_active = true
+                  AND cs.receive_messages = true
                   AND ums.platform = 'PUSH'
-                  AND ums.is_enabled = 1
+                  AND ums.is_enabled = true
                   AND ums.handle IS NOT NULL
                   AND (%s IS NULL OR cs.subscribed_at <= %s)
                 """,
